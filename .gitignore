@@ -10,6 +10,7 @@ Thumbs.db
 # Private data (users should add their own wiki content to .gitignore)
 raw/
 qa-reports/
-log.md
 log-archive/
-_state/
+# Exclude log.md at root only (minimal-vault example is tracked)
+/log.md
+/_state/
