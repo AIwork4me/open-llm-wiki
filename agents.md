@@ -6,7 +6,7 @@
 
 ## Before making any changes
 
-1. **Search existing issues** at https://github.com/yourusername/open-llm-wiki/issues
+1. **Search existing issues** at https://github.com/AIwork4me/open-llm-wiki/issues
 2. **If no issue exists, create one** — describe what you want to add/fix and why
 3. **Comment on the issue** stating your approach
 4. **Branch from `main`**: `git checkout -b feat/short-description main`

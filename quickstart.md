@@ -10,7 +10,7 @@
 
 ```bash
 # Clone this repo
-git clone https://github.com/yourusername/open-llm-wiki.git
+git clone https://github.com/AIwork4me/open-llm-wiki.git
 
 # Copy all three skills to your OpenClaw skills directory
 cp -r open-llm-wiki/skills/* ~/.openclaw-autoclaw/skills/
