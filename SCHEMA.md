@@ -112,7 +112,7 @@ Concept 页不需要 QA——它们是理解积累，不是事实声明。由 so
 2. 在 `drafts/` 创建 source 页，status: draft
 3. 执行 self_check（同 session，快速扫错）
 4. **spawn 独立子代理执行 QA**（大模型自评不可信）
-5. QA 通过 → promote 到 `sources/`
+5. QA 通过 → publish 到 `sources/`
 6. **更新 3-5 个相关 concept 页**（这是关键步骤，不是可选的）
 7. 如果 concept 页不存在，创建新的
 8. 更新 `index.md`
@@ -140,7 +140,7 @@ Concept 页不需要 QA——它们是理解积累，不是事实声明。由 so
 ```
 [YYYY-MM-DD HH:MM] action | target | agent | note
 ```
-action: create / edit / promote / demote / lint / qa / concept-update / query-writeback / contradiction-check / concept-revision
+action: create / edit / publish / demote / lint / qa / concept-update / query-writeback / contradiction-check / concept-revision
 agent: 操作执行者标识
 
 ### Log 归档
@@ -228,4 +228,5 @@ agent: 操作执行者标识
 4. 修订报告存入 `qa-reports/concept-revision-{LLM-NNNN}.md`
 
 修订周期：LLM-0050, LLM-0060, LLM-0070...（每 10 个 ID 触发一次）
+
 

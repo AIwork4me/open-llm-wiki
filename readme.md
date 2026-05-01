@@ -85,7 +85,7 @@ Three pipelines, one system:
 
 | Pipeline | Trigger | What It Does |
 |----------|---------|-------------|
-| **Ingest** | Drop a PDF | Parse → draft → **independent QA** → promote → update concepts → contradiction check |
+| **Ingest** | Drop a PDF | Parse → draft → **independent QA** → publish → update concepts → contradiction check |
 | **Ask** | Ask a question | Search wiki → synthesize → **write answer back** to wiki |
 | **Check** | Daily cron | Format, QA coverage, cross-references, log health |
 
@@ -163,3 +163,4 @@ See [SHOWCASE.md](SHOWCASE.md) for the full output and [EXAMPLES.md](EXAMPLES.md
 ## License
 
 MIT
+

@@ -27,7 +27,7 @@
   <line x1="517" y1="66" x2="536" y2="66" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <rect x="542" y="52" width="86" height="28" rx="6" fill="#0ea5e9"/>
-  <text x="585" y="71" text-anchor="middle" fill="white" font-weight="500">Promote</text>
+  <text x="585" y="71" text-anchor="middle" fill="white" font-weight="500">Publish</text>
   <line x1="635" y1="66" x2="654" y2="66" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <rect x="660" y="52" width="96" height="28" rx="6" fill="#16a34a"/>

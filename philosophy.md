@@ -57,7 +57,7 @@ V3.2 paper had Figure 1 with unlabeled numbers. We attributed 4 out of 5 data po
 
 After ingesting 15 papers, some concept pages had claims that directly contradicted newer papers. Nobody noticed because there was no mechanism to check.
 
-**Solution**: Independent contradiction detection sub-agent after every promote.
+**Solution**: Independent contradiction detection sub-agent after every publish.
 
 ### Concept Pages Become Dumps Without Pruning
 
@@ -111,3 +111,4 @@ Anyone who:
 Karpathy described a vision. We built the machinery. The aspiration is that others take this framework, adapt it to their domains (not just LLM research — biology, economics, law, anything), and build knowledge bases that compound with every interaction.
 
 The best wiki is the one you actually use. This framework tries to make using it effortless.
+

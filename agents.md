@@ -73,7 +73,7 @@ open-llm-wiki/
                     │         open-llm-wiki            │
                     │                                 │
   Paper (PDF) ─────▶│  wiki-ingest                    │
-                    │    parse → draft → QA → promote │
+                    │    parse → draft → QA → publish │
                     │         ↓                       │
   User query ──────▶│  query-writeback                │
                     │    search → answer → writeback   │
@@ -227,3 +227,4 @@ gh pr create --base main --fill
 | `test/` | Add or update test examples |
 
 All PRs target `main`. Squash-merge on approval.
+

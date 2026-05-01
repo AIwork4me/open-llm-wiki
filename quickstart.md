@@ -64,7 +64,7 @@ Add to your `AGENTS.md` (or equivalent):
 - Read `SCHEMA.md` before any wiki operation
 - One paper at a time (serial ingestion)
 - QA must use independent sub-agent (never self-evaluate)
-- QA score ≥ 7.0 required to promote
+- QA score ≥ 7.0 required to publish
 - Always cite sources: [[LLM-XXXX]]
 ```
 
@@ -82,7 +82,7 @@ The agent will:
 3. Self-check the draft
 4. Spawn an independent QA sub-agent
 5. Fix issues (if any)
-6. Promote to `sources/`
+6. publish to `sources/`
 7. Update concept pages and `index.md`
 8. Run contradiction check
 9. Log the operation
@@ -158,3 +158,4 @@ How did position encoding evolve from Transformer to RoPE to ALiBi?
 | PaddleOCR timeout | File too large | Use PyMuPDF (≥2MB files) |
 | Concept page is a dump | No periodic revision | Run concept revision manually |
 | Missing QA report | Skipped QA step | Never skip QA. Never. | 
+

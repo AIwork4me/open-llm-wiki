@@ -19,13 +19,13 @@ Paste these rules into your OpenClaw `AGENTS.md` to enable wiki operations. Adju
 ## Wiki QA 红线（零容忍）
 
 - QA 必须由独立子代理执行（sessions_spawn，model=glm-5.1）
-- 综合评分 ≥ 7.0 才能 promote
+- 综合评分 ≥ 7.0 才能 publish
 - QA 报告写入 qa-reports/（append-only）
 - 没有通过 QA 的条目不能 sync 到任何外部平台
 
 ## Wiki 矛盾检测规则
 
-- 每次 promote 后 spawn 独立子代理检查新 source 与已有 concept 页的冲突
+- 每次 publish 后 spawn 独立子代理检查新 source 与已有 concept 页的冲突
 - 矛盾用 ⚠️ [CONTRADICTION YYYY-MM-DD] 标注，不静默覆盖
 - 每 10 次 ingest 触发 concept 修订（独立子代理 review）
 ```
@@ -51,3 +51,4 @@ These three skills must be installed in `~/.openclaw-autoclaw/skills/`:
 | `wiki-ingest` | User provides a paper to add |
 | `query-writeback` | User asks about wiki content |
 | `wiki-lint` | Periodic (heartbeat or cron) |
+
