@@ -90,6 +90,10 @@ cp open-llm-wiki/templates/* my-wiki/templates/
 
 ## 设计原则
 
+### 0. 兼容 Obsidian
+
+Wiki 本身就是 Obsidian vault。用 Obsidian 打开——Graph View、搜索、反向链接、标签全部开箱即用。AI 写，人浏览。零配置。
+
 ### 1. 论文是原料，概念才是 wiki
 
 论文只是原始材料。概念——持续演化的、交叉引用的理解——才是真正的知识库。一篇论文的入库应该更新 3-5 个概念页。

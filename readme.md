@@ -131,6 +131,10 @@ See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
 
 ## Design Principles
 
+### 0. Obsidian-Compatible
+
+The wiki is an Obsidian vault. Open it in Obsidian — Graph view, search, backlinks, and tags work out of the box. AI writes, humans browse. No extra configuration needed.
+
 ### 1. Sources are input, Concepts are the wiki
 
 Papers are just raw material. Concepts — the evolving, cross-referenced understanding — are the real knowledge base. One paper's ingest should update 3-5 concept pages.
