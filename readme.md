@@ -2,9 +2,26 @@
 
 **Your AI knowledge base that compounds. Drop papers in → get a living wiki out.**
 
+> Every paper you read makes the next question faster. Every question you ask makes the wiki smarter. The knowledge compounds — not just accumulates.
+
 Inspired by [Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). 23 papers ingested. 11 concept pages. Zero manual writing. Every fact independently verified.
 
-[Quick Start](#quick-start) · [What It Looks Like](#what-it-looks-like) · [How It Works](#how-it-works) · [Why This Exists](#why-this-exists)
+[Quick Start](#quick-start) · [How It Works](#how-it-works) · [Why This Exists](#why-this-exists)
+
+---
+
+## One Number That Says Everything
+
+We wrote 23 paper summaries. AI self-check said all 23 were correct. Independent QA said **16 had errors.**
+
+That's why QA is independent. Always.
+
+```
+Self-check pass rate:  100%  ← "Looks good to me! ✅"
+Independent QA rate:    31%  ← wrong numbers, misattributed data, subtle contradictions
+```
+
+This is not a bug. It's the fundamental nature of LLMs — they cannot see their own mistakes. **Every other AI knowledge tool skips this step. We don't.**
 
 ---
 
@@ -20,13 +37,7 @@ A wiki that **compounds** — every paper enriches existing concepts, every ques
 
 ## What It Looks Like
 
-After ingesting 23 DeepSeek research papers into Obsidian:
-
-**The knowledge graph** — every node is a paper or concept, edges show relationships:
-
-> 📸 Drop a screenshot of Obsidian graph view here: `assets/graph-view.png`
-
-**A concept page** after 8 papers feed into it — evolving understanding, not a static summary:
+**A concept page after 8 papers feed into it** — evolving understanding, not a static summary:
 
 ```markdown
 # MoE (Mixture of Experts)
@@ -48,7 +59,21 @@ The breakthrough was V3's auxiliary-loss-free routing — no more balancing tax.
 
 **An anti-pattern we caught** (real example):
 
-> DeepSeek-V3.2's Figure 1 had unlabeled performance bars. We guessed which benchmark each bar belonged to. 4 out of 5 were wrong. Independent QA caught it. **Tables have labels. Figures have artistic license. Always verify against Table text.**
+> DeepSeek-V3.2's Figure 1 had unlabeled performance bars. We guessed which benchmark each bar belonged to. **4 out of 5 were wrong.** Independent QA caught it. Tables have labels. Figures have artistic license. Always verify against Table text.
+
+---
+
+## Quick Start
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AIwork4me/open-llm-wiki/main/setup.sh | bash
+cp ~/papers/attention.pdf my-llm-wiki/raw/
+# Tell your agent: "Ingest this paper: my-llm-wiki/raw/attention.pdf"
+```
+
+Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) — graph view, backlinks, and tags work out of the box. No config needed.
+
+**Prerequisites**: An AI agent that can spawn sub-agents ([OpenClaw](https://github.com/openclaw/openclaw) + glm-5.1 recommended). Full guide: [QUICKSTART.md](QUICKSTART.md).
 
 ---
 
@@ -78,47 +103,6 @@ Three pipelines, one system:
 0/3 reliability (claude) →  4/4 reliability (glm-5.1)
 1 critical misattribution caught  →  V3.2 Figure vs Table
 ```
-
----
-
-## Why This Exists
-
-| | Manual Notes | Zotero | Readwise | **open-llm-wiki** |
-|---|:-:|:-:|:-:|:-:|
-| Auto-ingest papers | ❌ | ❌ | ❌ | ✅ |
-| Independent AI QA | ❌ | ❌ | ❌ | ✅ |
-| Contradiction detection | ❌ | ❌ | ❌ | ✅ |
-| Concepts compound across papers | ❌ | ❌ | Partial | ✅ |
-| Query writeback (questions grow the wiki) | ❌ | ❌ | ❌ | ✅ |
-| Obsidian native (graph view, backlinks) | ❌ | ✅ | ✅ | ✅ |
-| No API keys required | ✅ | ✅ | ❌ | ✅ |
-
----
-
-## Quick Start
-
-```bash
-# One-line setup
-curl -sSL https://raw.githubusercontent.com/AIwork4me/open-llm-wiki/main/setup.sh | bash
-
-# Or with a custom directory
-curl -sSL https://raw.githubusercontent.com/AIwork4me/open-llm-wiki/main/setup.sh | bash -s my-wiki
-```
-
-This creates your wiki structure, copies templates, and initializes state files. Then:
-
-```bash
-# Drop a paper and ingest it
-cp ~/papers/attention.pdf my-llm-wiki/raw/
-# Tell your agent: "Ingest this paper: my-llm-wiki/raw/attention.pdf"
-
-# Open in Obsidian
-open my-llm-wiki/
-```
-
-**Prerequisites**: An AI agent that can spawn sub-agents (we use [OpenClaw](https://github.com/openclaw/openclaw) + glm-5.1, but the concepts are portable).
-
-See [QUICKSTART.md](QUICKSTART.md) for the full guide.
 
 ---
 
