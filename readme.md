@@ -79,7 +79,7 @@ open-llm-wiki/
 │   ├── source-template.md       # Template for paper understanding pages
 │   └── concept-template.md      # Template for concept accumulation pages
 ├── examples/
-│   └── deepseek-v3-sample.md   # A complete source page example
+│   └── deepseek-v4-sample.md   # A complete source page example (1.6T MoE, 1M context)
 └── LICENSE                      # MIT
 ```
 
