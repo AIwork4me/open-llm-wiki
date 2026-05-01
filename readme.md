@@ -1,8 +1,8 @@
 # open-llm-wiki
 
-**Your AI knowledge base that compounds. Drop papers in �?get a living wiki out.**
+**Your AI knowledge base that compounds. Drop papers in, get a living wiki out.**
 
-> Every paper you read makes the next question faster. Every question you ask makes the wiki smarter. The knowledge compounds �?not just accumulates.
+> Every paper you read makes the next question faster. Every question you ask makes the wiki smarter. The knowledge compounds -- not just accumulates.
 
 Inspired by [Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). 23 papers ingested. 11 concept pages. Zero manual writing. Every fact independently verified.
 
