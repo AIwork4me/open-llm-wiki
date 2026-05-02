@@ -4,7 +4,7 @@
 
 > Every paper you read makes the next question faster. Every question you ask makes the wiki smarter. The knowledge compounds — not just accumulates.
 
-Inspired by [Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). 23 papers ingested. 11 concept pages. Zero manual writing. Every fact independently verified.
+Inspired by [Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). 22 papers ingested. 10 concept pages. Zero manual writing. Every fact independently verified.
 
 [Quick Start](#quick-start) · [How It Works](#how-it-works) · [Why This Exists](#why-this-exists)
 
@@ -12,7 +12,7 @@ Inspired by [Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6
 
 ## One Number That Says Everything
 
-We wrote 23 paper summaries. AI self-check said all 23 were correct. Independent QA said **16 had errors.**
+We wrote 22 paper summaries. AI self-check said all 22 were correct. Independent QA said **16 had errors.**
 
 That's why QA is independent. Always.
 
@@ -91,7 +91,7 @@ Three pipelines, one system:
 
 ### The Key Innovation: Independent QA
 
-**LLMs cannot self-evaluate.** This is the #1 lesson from 23 papers.
+**LLMs cannot self-evaluate.** This is the #1 lesson from 22 papers.
 
 - Self-check catches typos. It does NOT catch wrong numbers, misattributed data, or subtle contradictions.
 - Every paper goes through an **independent sub-agent QA** (separate context, separate session).
@@ -127,18 +127,18 @@ open-llm-wiki/
 
 ## Battle-Tested
 
-Built and validated through ingesting **23 DeepSeek research papers** (Jan 2024 �?Jan 2026):
+Built and validated through ingesting **22 DeepSeek research papers** (Jan 2024 — Jan 2026):
 
 | Metric | Value |
 |--------|-------|
-| Papers ingested | 23 |
-| Source pages (stable) | 23 |
-| Concept pages | 11 |
-| First-pass QA rate | 31% �?~70% after "hard numbers first" rule |
+| Papers ingested | 22 |
+| Source pages (stable) | 22 |
+| Concept pages | 10 |
+| First-pass QA rate | 31% → ~70% after "hard numbers first" rule |
 | Critical misattributions caught | 1 (V3.2 Figure vs Table) |
 | Sub-agent reliability (glm-5.1) | 4/4 = 100% |
 
-Coverage: architecture evolution (DeepSeek LLM �?V4), reasoning (R1, GRPO), multimodal (VL, Janus family), specialized (Math, OCR, Prover).
+Coverage: architecture evolution (DeepSeek LLM → V4), reasoning (R1, GRPO), multimodal (VL, Janus family), specialized (Math, OCR, Prover).
 
 See [SHOWCASE.md](SHOWCASE.md) for the full output and [EXAMPLES.md](EXAMPLES.md) for every mistake we made.
 
@@ -158,7 +158,7 @@ See [SHOWCASE.md](SHOWCASE.md) for the full output and [EXAMPLES.md](EXAMPLES.md
 
 - **[Andrej Karpathy](https://twitter.com/karpathy)** �?the [LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) that started it all
 - **[OpenClaw](https://github.com/openclaw/openclaw)** �?the agent platform powering independent QA
-- **DeepSeek** �?the 23 papers that served as our test suite
+- **DeepSeek** — the 22 papers that served as our test suite
 
 ## Star History
 

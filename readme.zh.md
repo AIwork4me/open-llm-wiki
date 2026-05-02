@@ -4,13 +4,13 @@
 
 > 每读一篇论文，下一个问题就更快。每问一个问题，wiki 就更聪明。知识在复利——不只是累积。
 
-灵感来自 [Karpathy 的 LLM Wiki 概念](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。23 篇论文实战验证。零手写。每条事实独立审查。
+灵感来自 [Karpathy 的 LLM Wiki 概念](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。22 篇论文实战验证。零手写。每条事实独立审查。
 
 ---
 
 ## 一个数字说明一切
 
-我们写了 23 篇论文摘要。AI 自检说全部正确。独立 QA 说 **16 篇有错误。**
+我们写了 22 篇论文摘要。AI 自检说全部正确。独立 QA 说 **16 篇有错误。**
 
 这就是为什么 QA 必须独立。永远。
 
@@ -124,13 +124,13 @@ open-llm-wiki/
 
 ## 实战验证
 
-23 篇 DeepSeek 论文（2024.01 - 2026.01），覆盖架构演化、推理突破、多模态、专业化方向：
+22 篇 DeepSeek 论文（2024.01 - 2026.01），覆盖架构演化、推理突破、多模态、专业化方向：
 
 | 指标 | 数值 |
 |------|------|
-| 入库论文 | 23 |
-| Source 页 | 23 |
-| Concept 页 | 11 |
+| 入库论文 | 22 |
+| Source 页 | 22 |
+| Concept 页 | 10 |
 | 首次 QA 通过率 | 31% → 70%（"硬数字优先"规则后） |
 | 抓住的关键错误 | 1 次（V3.2 Figure vs Table） |
 | 子代理可靠性 | 4/4 = 100% |
@@ -157,7 +157,7 @@ open-llm-wiki/
 
 - **[Andrej Karpathy](https://twitter.com/karpathy)** — [LLM Wiki 概念](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)的原创者
 - **[OpenClaw](https://github.com/openclaw/openclaw)** — 让独立 QA 成为可能的 agent 平台
-- **DeepSeek** — 23 篇论文作为测试套件
+- **DeepSeek** — 22 篇论文作为测试套件
 
 ## 许可
 

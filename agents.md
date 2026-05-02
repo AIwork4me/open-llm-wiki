@@ -20,7 +20,7 @@ open-llm-wiki/
 ├── README.md              →Start here. What this project is.
 ├── README.zh.md           →Chinese version
 ├── AGENTS.md              →This file. Rules and structure.
-├── SHOWCASE.md            →Real output from 23 papers. Proof it works.
+├── SHOWCASE.md            →Real output from 22 papers. Proof it works.
 ├── PHILOSOPHY.md          →Design philosophy. Why these decisions.
 ├── EXAMPLES.md            →Anti-patterns. What we learned the hard way.
 ├── QUICKSTART.md          →5-minute setup guide.

@@ -1,4 +1,4 @@
-# EXAMPLES.md —Anti-Patterns from 23 Papers
+# EXAMPLES.md —Anti-Patterns from 22 Papers
 
 Real mistakes we made, real fixes we applied. Each example shows what went wrong, why it matters, and the lesson.
 

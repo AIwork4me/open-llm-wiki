@@ -33,7 +33,7 @@ Your understanding evolves. What you wrote 6 months ago might be wrong now. But 
 
 ## What We Had to Learn the Hard Way
 
-Karpathy's gist was a vision, not a blueprint. Here's what 23 papers taught us:
+Karpathy's gist was a vision, not a blueprint. Here's what 22 papers taught us:
 
 ### LLMs Cannot Self-Evaluate
 
@@ -67,7 +67,7 @@ After 20+ papers, concept pages became chronological append logs — fact dumps 
 
 ## The Compound Effect
 
-This is the real payoff. After 23 papers:
+This is the real payoff. After 22 papers:
 
 - **Asking "how did DeepSeek's MoE evolve?"** produces a 12-row innovation table spanning 2 years, synthesized from 8 source pages, something no single paper contains
 - **Querying "what's the relationship between GRPO and PPO?"** produces a comparison that gets written back to the `reasoning` concept page, available for every future query
