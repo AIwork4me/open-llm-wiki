@@ -17,11 +17,11 @@ We wrote 22 paper summaries. AI self-check said all 22 were correct. Independent
 That's why QA is independent. Always.
 
 ```
-Self-check pass rate:  100%  �?"Looks good to me! �?
-Independent QA rate:    31%  �?wrong numbers, misattributed data, subtle contradictions
+Self-check pass rate:  100%  →"Looks good to me! →
+Independent QA rate:    31%  →wrong numbers, misattributed data, subtle contradictions
 ```
 
-This is not a bug. It's the fundamental nature of LLMs �?they cannot see their own mistakes. **Every other AI knowledge tool skips this step. We don't.**
+This is not a bug. It's the fundamental nature of LLMs →they cannot see their own mistakes. **Every other AI knowledge tool skips this step. We don't.**
 
 ---
 
@@ -31,13 +31,13 @@ You read papers, take notes, and forget everything in a week. Your notes don't g
 
 ## The Fix
 
-A wiki that **compounds** �?every paper enriches existing concepts, every question can grow the knowledge base, and contradictions are caught automatically by independent AI reviewers.
+A wiki that **compounds** →every paper enriches existing concepts, every question can grow the knowledge base, and contradictions are caught automatically by independent AI reviewers.
 
 ---
 
 ## What It Looks Like
 
-**A concept page after 8 papers feed into it** �?evolving understanding, not a static summary:
+**A concept page after 8 papers feed into it** →evolving understanding, not a static summary:
 
 ```markdown
 # MoE (Mixture of Experts)
@@ -49,12 +49,12 @@ A wiki that **compounds** �?every paper enriches existing concepts, every ques
 |--------|-------------------|-------------------------------|
 | 2024.01 | DeepSeekMoE      | top-6/64 experts, 2.8B active |
 | 2024.06 | Coder-V2         | 236B/21B, MoE for code        |
-| 2024.12 | V3               | 671B/37B, aux-loss-free �?    |
+| 2024.12 | V3               | 671B/37B, aux-loss-free →    |
 | 2026.04 | V4               | 1.6T/49B, 1M context ★★      |
 
 ## Key Insight
 MoE went from "experimental" to "production architecture" over 4 generations.
-The breakthrough was V3's auxiliary-loss-free routing �?no more balancing tax.
+The breakthrough was V3's auxiliary-loss-free routing →no more balancing tax.
 ```
 
 **An anti-pattern we caught** (real example):
@@ -71,7 +71,7 @@ cp ~/papers/attention.pdf my-llm-wiki/raw/
 # Tell your agent: "Ingest this paper: my-llm-wiki/raw/attention.pdf"
 ```
 
-Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) �?graph view, backlinks, and tags work out of the box. No config needed.
+Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) →graph view, backlinks, and tags work out of the box. No config needed.
 
 **Prerequisites**: An AI agent that can spawn sub-agents ([OpenClaw](https://github.com/openclaw/openclaw) + glm-5.1 recommended). Full guide: [QUICKSTART.md](QUICKSTART.md).
 
@@ -85,8 +85,8 @@ Three pipelines, one system:
 
 | Pipeline | Trigger | What It Does |
 |----------|---------|-------------|
-| **Ingest** | Drop a PDF | Parse �?draft �?**independent QA** �?publish �?update concepts �?contradiction check |
-| **Ask** | Ask a question | Search wiki �?synthesize �?**write answer back** to wiki |
+| **Ingest** | Drop a PDF | Parse →draft →**independent QA** →publish →update concepts →contradiction check |
+| **Ask** | Ask a question | Search wiki →synthesize →**write answer back** to wiki |
 | **Check** | Daily cron | Format, QA coverage, cross-references, log health |
 
 ### The Key Innovation: Independent QA
@@ -95,13 +95,13 @@ Three pipelines, one system:
 
 - Self-check catches typos. It does NOT catch wrong numbers, misattributed data, or subtle contradictions.
 - Every paper goes through an **independent sub-agent QA** (separate context, separate session).
-- QA score �?7.0 required. No exceptions.
+- QA score →7.0 required. No exceptions.
 - Contradiction detection also uses independent sub-agents.
 
 ```
-31% first-pass QA rate  �? taught us to write hard numbers first
-0/3 reliability (claude) �? 4/4 reliability (glm-5.1)
-1 critical misattribution caught  �? V3.2 Figure vs Table
+31% first-pass QA rate  → taught us to write hard numbers first
+0/3 reliability (claude) → 4/4 reliability (glm-5.1)
+1 critical misattribution caught  → V3.2 Figure vs Table
 ```
 
 ---
@@ -110,17 +110,17 @@ Three pipelines, one system:
 
 ```
 open-llm-wiki/
-├── setup.sh                  �?One-line install
-├── SCHEMA.md                 �?Wiki data structure
+├── setup.sh                  →One-line install
+├── SCHEMA.md                 →Wiki data structure
 ├── skills/
-�?  ├── wiki-ingest/          �?Paper �?wiki pipeline (10 steps)
-�?  ├── query-writeback/      �?Question �?wiki growth (6 steps)
-�?  └── wiki-lint/            �?Health check (5 dimensions)
-├── templates/                �?Page templates
+→  ├── wiki-ingest/          →Paper →wiki pipeline (10 steps)
+→  ├── query-writeback/      →Question →wiki growth (6 steps)
+→  └── wiki-lint/            →Health check (5 dimensions)
+├── templates/                →Page templates
 ├── examples/
-�?  ├── deepseek-v4-sample.md �?Real source page example
-�?  └── minimal-vault/        �?Complete minimal wiki you can run
-└── assets/                   �?Diagrams and screenshots
+→  ├── deepseek-v4-sample.md →Real source page example
+→  └── minimal-vault/        →Complete minimal wiki you can run
+└── assets/                   →Diagrams and screenshots
 ```
 
 ---
@@ -146,18 +146,18 @@ See [SHOWCASE.md](SHOWCASE.md) for the full output and [EXAMPLES.md](EXAMPLES.md
 
 ## Design Principles
 
-1. **Sources are input, Concepts are the wiki** �?papers feed concepts, not the other way around
-2. **LLMs cannot self-evaluate** �?QA and contradiction detection use independent sub-agents, always
-3. **Queries grow the wiki** �?good synthesis gets written back, not lost in chat
-4. **Contradictions are marked, never overwritten** �?`⚠️ [CONTRADICTION]` preserves both sides
-5. **Hard numbers are the backbone** �?"competitive results" is useless; exact benchmarks are knowledge
+1. **Sources are input, Concepts are the wiki** →papers feed concepts, not the other way around
+2. **LLMs cannot self-evaluate** →QA and contradiction detection use independent sub-agents, always
+3. **Queries grow the wiki** →good synthesis gets written back, not lost in chat
+4. **Contradictions are marked, never overwritten** →`⚠️ [CONTRADICTION]` preserves both sides
+5. **Hard numbers are the backbone** →"competitive results" is useless; exact benchmarks are knowledge
 
 ---
 
 ## Acknowledgments
 
-- **[Andrej Karpathy](https://twitter.com/karpathy)** �?the [LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) that started it all
-- **[OpenClaw](https://github.com/openclaw/openclaw)** �?the agent platform powering independent QA
+- **[Andrej Karpathy](https://twitter.com/karpathy)** →the [LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) that started it all
+- **[OpenClaw](https://github.com/openclaw/openclaw)** →the agent platform powering independent QA
 - **DeepSeek** — the 22 papers that served as our test suite
 
 ## Star History
