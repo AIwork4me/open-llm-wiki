@@ -197,6 +197,8 @@ Allowed actions include:
 The vault may contain runtime scripts at `.open-llm-wiki/scripts/`:
 
 ```bash
+python .open-llm-wiki/scripts/pdf_corpus_report.py raw --fail-on-missing --fail-on-suspicious
+python .open-llm-wiki/scripts/pdf_corpus_to_markdown.py raw --output-root raw --no-download-images
 python .open-llm-wiki/scripts/pdf_to_markdown.py raw/source.pdf --output raw/source_markdown
 python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
 python .open-llm-wiki/scripts/wiki_search.py . "query terms"

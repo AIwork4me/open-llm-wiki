@@ -114,10 +114,20 @@ uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf \
   --output my-llm-wiki/raw/attention_markdown
 ```
 
+For a folder of papers, use the corpus wrapper. It skips completed conversions
+unless `--force` is set and writes a TSV audit log:
+
+```bash
+uv run python scripts/pdf_corpus_to_markdown.py my-llm-wiki/raw \
+  --output-root my-llm-wiki/raw \
+  --no-download-images
+```
+
 Useful options:
 
 ```bash
 uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf --dry-run
+uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf --retries 4 --timeout 900
 uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf --no-download-images
 uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf --api-url "$OPEN_LLM_WIKI_LAYOUT_API_URL"
 ```
@@ -125,7 +135,7 @@ uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf --api-url
 This sends the PDF bytes to the configured layout-parsing API. Use it only for
 documents you are allowed to process externally. The output includes
 `combined.md`, per-document Markdown files, downloaded images when enabled, and
-`manifest.json`.
+`manifest.json` with the API attempt count and parser warnings.
 
 ## Ask the Wiki
 

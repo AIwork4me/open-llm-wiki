@@ -19,6 +19,8 @@ or the vault:
 
 - `<repo>/scripts/wiki_lint.py`
 - `<vault>/.open-llm-wiki/scripts/wiki_lint.py`
+- `<repo>/scripts/pdf_corpus_to_markdown.py`
+- `<vault>/.open-llm-wiki/scripts/pdf_corpus_to_markdown.py`
 - `<repo>/scripts/pdf_to_markdown.py`
 - `<vault>/.open-llm-wiki/scripts/pdf_to_markdown.py`
 - `<repo>/scripts/wiki_search.py`
@@ -72,6 +74,13 @@ For layout-sensitive PDFs, use `pdf_to_markdown.py` when the user has configured
 
 ```bash
 uv run python scripts/pdf_to_markdown.py "<pdf>" --output "<vault>/raw/<slug>_markdown"
+```
+
+For an explicitly authorized paper corpus, use the batch wrapper first and then
+ingest the resulting `combined.md` files one source at a time:
+
+```bash
+uv run python scripts/pdf_corpus_to_markdown.py "<vault>/raw" --output-root "<vault>/raw" --no-download-images
 ```
 
 Use cloud parsing only for sources under the configured service limits and only

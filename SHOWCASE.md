@@ -62,6 +62,6 @@ fresh vault initialization:
 uv run python scripts/wiki_eval.py
 ```
 
-PDF-to-Markdown conversion is smoke-tested with `--help` in CI because the real
-API call requires a private token and sends document bytes to the configured
-layout-parsing endpoint.
+PDF-to-Markdown conversion, the corpus wrapper, and the corpus report are
+smoke-tested with `--help` in CI because the real API call requires a private
+token and sends document bytes to the configured layout-parsing endpoint.

@@ -11,6 +11,8 @@ import argparse
 import base64
 import json
 import os
+import sys
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -22,6 +24,16 @@ from wiki_common import write_text
 DEFAULT_API_URL = "https://q6mbb0r0t8m9q4pf.aistudio-app.com/layout-parsing"
 DEFAULT_TOKEN_ENV = "OPEN_LLM_WIKI_LAYOUT_TOKEN"
 FALLBACK_TOKEN_ENV = "AI_STUDIO_LAYOUT_TOKEN"
+RETRY_STATUS_CODES = {408, 409, 425, 429}
+SUSPICIOUS_TEXT_TOKENS = [
+    chr(0xFFFD),
+    chr(0x922B),
+    chr(0x9225),
+    chr(0x922E),
+    chr(0x9241),
+    chr(0x9242),
+    chr(0x9983),
+]
 DEFAULT_IGNORE_LABELS = [
     "header",
     "header_image",
@@ -106,6 +118,61 @@ def download_file(url: str, target: Path, timeout: int) -> None:
     target.write_bytes(response.content)
 
 
+def should_retry_response(response: requests.Response) -> bool:
+    return response.status_code in RETRY_STATUS_CODES or 500 <= response.status_code < 600
+
+
+def request_with_retries(
+    api_url: str,
+    payload: dict[str, object],
+    headers: dict[str, str],
+    timeout: int,
+    retries: int,
+    retry_delay: int,
+) -> tuple[requests.Response, int]:
+    if retries < 0:
+        raise ValueError("--retries must be zero or greater")
+    if retry_delay < 0:
+        raise ValueError("--retry-delay must be zero or greater")
+    attempts = retries + 1
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.post(api_url, json=payload, headers=headers, timeout=timeout)
+            if should_retry_response(response) and attempt < attempts:
+                print(
+                    f"layout API returned {response.status_code}; retrying "
+                    f"attempt {attempt + 1}/{attempts} after {retry_delay}s",
+                    file=sys.stderr,
+                )
+                time.sleep(retry_delay)
+                continue
+            response.raise_for_status()
+            return response, attempt
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            print(
+                f"layout API request failed with {exc.__class__.__name__}; retrying "
+                f"attempt {attempt + 1}/{attempts} after {retry_delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(retry_delay)
+    if last_error:
+        raise last_error
+    raise RuntimeError("layout API request failed without a response")
+
+
+def find_suspicious_text(text: str, label: str) -> list[str]:
+    warnings: list[str] = []
+    for token in SUSPICIOUS_TEXT_TOKENS:
+        count = text.count(token)
+        if count:
+            warnings.append(f"{label}: token U+{ord(token):04X} occurred {count} time(s)")
+    return warnings
+
+
 def convert(args: argparse.Namespace) -> int:
     input_path = args.input.resolve()
     if not input_path.exists():
@@ -116,11 +183,9 @@ def convert(args: argparse.Namespace) -> int:
     if size > args.max_bytes:
         raise SystemExit(f"input is {size} bytes, above --max-bytes {args.max_bytes}")
 
-    output_dir = args.output.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     payload = build_payload(input_path, args.file_type, args.options_file)
     if args.dry_run:
+        output_dir = args.output.resolve()
         print(f"input: {input_path}")
         print(f"output: {output_dir}")
         print(f"api_url: {args.api_url}")
@@ -129,13 +194,22 @@ def convert(args: argparse.Namespace) -> int:
         print("dry run: no API request sent")
         return 0
 
+    output_dir = args.output.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     token = read_token(args.token_env)
     headers = {
         "Authorization": f"token {token}",
         "Content-Type": "application/json",
     }
-    response = requests.post(args.api_url, json=payload, headers=headers, timeout=args.timeout)
-    response.raise_for_status()
+    response, attempts = request_with_retries(
+        args.api_url,
+        payload,
+        headers,
+        args.timeout,
+        args.retries,
+        args.retry_delay,
+    )
     data = response.json()
     if "result" not in data or "layoutParsingResults" not in data["result"]:
         raise SystemExit("API response did not contain result.layoutParsingResults")
@@ -143,9 +217,11 @@ def convert(args: argparse.Namespace) -> int:
     result = data["result"]
     markdown_paths: list[str] = []
     combined_parts: list[str] = []
+    warnings: list[str] = []
     for index, item in enumerate(result["layoutParsingResults"]):
         markdown = item.get("markdown", {})
         markdown_text = markdown.get("text", "")
+        warnings.extend(find_suspicious_text(markdown_text, f"doc_{index}.md"))
         md_path = output_dir / f"doc_{index}.md"
         write_text(md_path, markdown_text)
         markdown_paths.append(str(md_path))
@@ -160,15 +236,23 @@ def convert(args: argparse.Namespace) -> int:
                 download_file(image_url, target, args.timeout)
 
     combined = output_dir / args.combined_name
-    write_text(combined, "\n\n---\n\n".join(part for part in combined_parts if part))
+    combined_text = "\n\n---\n\n".join(part for part in combined_parts if part)
+    write_text(combined, combined_text)
+    warnings.extend(find_suspicious_text(combined_text, args.combined_name))
+    for warning in warnings:
+        print(f"warning: suspicious text: {warning}", file=sys.stderr)
+    if warnings and args.fail_on_suspicious_text:
+        raise SystemExit("suspicious text tokens found in API output")
 
     manifest = {
         "input": str(input_path),
         "api_url": args.api_url,
         "file_type": args.file_type,
+        "attempts": attempts,
         "documents": markdown_paths,
         "combined": str(combined),
         "download_images": args.download_images,
+        "warnings": warnings,
     }
     write_text(output_dir / "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
 
@@ -184,10 +268,13 @@ def main() -> int:
     parser.add_argument("--api-url", default=os.environ.get("OPEN_LLM_WIKI_LAYOUT_API_URL", DEFAULT_API_URL))
     parser.add_argument("--token-env", default=DEFAULT_TOKEN_ENV)
     parser.add_argument("--file-type", type=int, choices=[0, 1], default=0, help="0=PDF, 1=image.")
-    parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--retries", type=int, default=2, help="Retry count for transient API failures.")
+    parser.add_argument("--retry-delay", type=int, default=5, help="Seconds to wait between retries.")
     parser.add_argument("--max-bytes", type=int, default=50 * 1024 * 1024)
     parser.add_argument("--options-file", type=Path, help="JSON object overriding API options.")
     parser.add_argument("--combined-name", default="combined.md")
+    parser.add_argument("--fail-on-suspicious-text", action="store_true")
     parser.add_argument("--no-download-images", dest="download_images", action="store_false")
     parser.add_argument("--dry-run", action="store_true")
     parser.set_defaults(download_images=True)

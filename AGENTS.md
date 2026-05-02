@@ -24,8 +24,9 @@ product is the behavior of the three skills in `skills/`:
 - Do not commit `.env`, API tokens, generated parser output, or private source
   documents.
 - Prefer runtime scripts for repeatable operations: `wiki_init.py`,
-  `pdf_to_markdown.py`, `wiki_lint.py`, `wiki_search.py`, `wiki_writeback.py`,
-  and `wiki_eval.py`.
+  `pdf_corpus_report.py`, `pdf_corpus_to_markdown.py`,
+  `pdf_to_markdown.py`, `wiki_lint.py`, `wiki_search.py`,
+  `wiki_writeback.py`, and `wiki_eval.py`.
 - `raw/` files are immutable evidence.
 - QA reports and contradiction reports are append-only.
 - Query writeback and lint are read-only by default.

@@ -12,6 +12,8 @@ from wiki_common import write_text
 
 DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "templates", "_state", "log-archive"]
 RUNTIME_SCRIPTS = [
+    "pdf_corpus_report.py",
+    "pdf_corpus_to_markdown.py",
     "pdf_to_markdown.py",
     "wiki_common.py",
     "wiki_lint.py",

@@ -101,6 +101,8 @@ def check_docs() -> None:
         "pyproject.toml",
         "setup.sh",
         "uv.lock",
+        "scripts/pdf_corpus_report.py",
+        "scripts/pdf_corpus_to_markdown.py",
         "scripts/pdf_to_markdown.py",
         "scripts/wiki_common.py",
         "scripts/wiki_init.py",
@@ -172,6 +174,8 @@ def run_runtime_checks() -> None:
     commands = [
         [sys.executable, "scripts/wiki_lint.py", "examples/minimal-vault", "--fail-on", "p1"],
         [sys.executable, "scripts/wiki_search.py", "examples/minimal-vault", "attention transformer", "--limit", "2"],
+        [sys.executable, "scripts/pdf_corpus_report.py", "--help"],
+        [sys.executable, "scripts/pdf_corpus_to_markdown.py", "--help"],
         [sys.executable, "scripts/pdf_to_markdown.py", "--help"],
         [sys.executable, "scripts/wiki_eval.py"],
     ]

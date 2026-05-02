@@ -42,6 +42,8 @@ The skills coordinate judgment. The runtime scripts handle repeatable checks:
 | Script | Purpose |
 | --- | --- |
 | `scripts/wiki_init.py` | initialize a portable personal/team vault |
+| `scripts/pdf_corpus_report.py` | verify converted corpus coverage, manifests, parser warnings, and semantic hits |
+| `scripts/pdf_corpus_to_markdown.py` | batch-convert a PDF folder with retries, skip logic, and a TSV audit log |
 | `scripts/pdf_to_markdown.py` | convert PDFs to Markdown through a configurable layout-parsing API |
 | `scripts/wiki_lint.py` | verify structure, QA gates, links, index, logs, and stale claims |
 | `scripts/wiki_search.py` | local markdown search across source and concept pages |
@@ -87,9 +89,18 @@ uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf \
   --output my-llm-wiki/raw/attention_markdown
 ```
 
+For a paper corpus:
+
+```bash
+uv run python scripts/pdf_corpus_to_markdown.py my-llm-wiki/raw \
+  --output-root my-llm-wiki/raw \
+  --no-download-images
+```
+
 The token is read from the environment and must not be committed. Override the
 endpoint with `OPEN_LLM_WIKI_LAYOUT_API_URL` or `--api-url` when using a
-different layout-parsing service.
+different layout-parsing service. Transient cloud failures are retried, and
+each output `manifest.json` records the number of API attempts.
 
 Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) if you want graph view,
 backlinks, and tag navigation.

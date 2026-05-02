@@ -31,6 +31,8 @@ Skill 负责判断和协调；runtime 脚本负责可重复检查：
 | Script | 用途 |
 | --- | --- |
 | `scripts/wiki_init.py` | 初始化个人/团队 vault |
+| `scripts/pdf_corpus_report.py` | 验证批量解析覆盖率、manifest、解析告警和语义命中 |
+| `scripts/pdf_corpus_to_markdown.py` | 批量将 PDF 文件夹转成 Markdown，并记录 TSV 审计日志 |
 | `scripts/pdf_to_markdown.py` | 通过可配置的 layout parsing API 将 PDF 转成 Markdown |
 | `scripts/wiki_lint.py` | 检查结构、QA、链接、index、log 和过时断言 |
 | `scripts/wiki_search.py` | 本地 markdown 搜索 |
@@ -98,6 +100,16 @@ export OPEN_LLM_WIKI_LAYOUT_TOKEN="<token>"
 uv run python scripts/pdf_to_markdown.py my-llm-wiki/raw/attention.pdf \
   --output my-llm-wiki/raw/attention_markdown
 ```
+
+批量处理论文文件夹：
+
+```bash
+uv run python scripts/pdf_corpus_to_markdown.py my-llm-wiki/raw \
+  --output-root my-llm-wiki/raw \
+  --no-download-images
+```
+
+云端解析会自动重试临时失败；每个输出目录的 `manifest.json` 会记录 API 尝试次数和解析告警。
 
 GitHub Actions 会在 push 和 pull request 时运行这些检查。
 
