@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -48,6 +49,11 @@ def main() -> int:
         raise SystemExit("writeback eval did not produce a reviewable proposal")
 
     with tempfile.TemporaryDirectory() as tmp:
+        growth_vault = Path(tmp) / "growth-vault"
+        shutil.copytree(vault, growth_vault)
+        run([sys.executable, "scripts/wiki_grow.py", str(growth_vault), "--apply-concept-revision"])
+        run([sys.executable, "scripts/wiki_lint.py", str(growth_vault), "--fail-on", "p1"])
+
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])

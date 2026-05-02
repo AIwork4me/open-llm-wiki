@@ -35,6 +35,12 @@ jobs:
         run: |
           uv run python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
           uv run python scripts/wiki_search.py examples/minimal-vault "attention transformer" --limit 2
+          uv run python scripts/wiki_claims.py --help
+          uv run python scripts/wiki_concept_revision.py --help
+          uv run python scripts/wiki_contradictions.py --help
+          uv run python scripts/wiki_grow.py --help
+          uv run python scripts/wiki_ingest_corpus.py --help
+          uv run python scripts/wiki_semantic_qa.py --help
           uv run python scripts/pdf_corpus_report.py --help
           uv run python scripts/pdf_corpus_to_markdown.py --help
           uv run python scripts/pdf_to_markdown.py --help

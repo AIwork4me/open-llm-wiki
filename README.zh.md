@@ -2,7 +2,7 @@
 
 **一个面向 Claude Code 的 Skill 套件和轻量 runtime，用来把研究论文变成可审计、可持续增长的 LLM Wiki。**
 
-open-llm-wiki 帮助 Agent 将论文转成 source page，把多个 source 连接成 concept page，并用独立 QA、矛盾检查、append-only 日志、确定性 lint/search 工具和可审阅 writeback diff 保持知识库可信。
+open-llm-wiki 帮助 Agent 将论文转成 source page，抽取结构化 claim，把多个 source 连接成 concept page，并用独立 QA、矛盾检查、append-only 日志、确定性语义增长工具和可审阅 writeback diff 保持知识库可信。
 
 灵感来自 [Andrej Karpathy 的 LLM Wiki 构想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。
 
@@ -23,6 +23,7 @@ open-llm-wiki 帮助 Agent 将论文转成 source page，把多个 source 连接
 | `wiki-ingest` | 用户要求加入一篇论文 | 解析文本、草稿页、独立 QA、稳定 source page、概念更新、矛盾报告 |
 | `query-writeback` | 用户提出跨 source 的 wiki 问题 | 先给有引用的回答；必要时提出写回计划 |
 | `wiki-lint` | 用户或自动化要求健康检查 | 默认只报告；经授权后才执行维护写入 |
+| `wiki-grow` runtime | 用户或自动化要求语义自增长 | claim 抽取、语义 QA、矛盾扫描、概念修订、lint |
 
 ## Runtime 层
 
@@ -34,6 +35,12 @@ Skill 负责判断和协调；runtime 脚本负责可重复检查：
 | `scripts/pdf_corpus_report.py` | 验证批量解析覆盖率、manifest、解析告警和语义命中 |
 | `scripts/pdf_corpus_to_markdown.py` | 批量将 PDF 文件夹转成 Markdown，并记录 TSV 审计日志 |
 | `scripts/pdf_to_markdown.py` | 通过可配置的 layout parsing API 将 PDF 转成 Markdown |
+| `scripts/wiki_ingest_corpus.py` | 将解析后的 Markdown 语料发布为 source/QA/concept 页面 |
+| `scripts/wiki_claims.py` | 抽取 normalized claims 到 `claims/claims.jsonl` |
+| `scripts/wiki_semantic_qa.py` | 按 evidence anchor 检查 claim 质量 |
+| `scripts/wiki_contradictions.py` | 基于 normalized claims 扫描矛盾候选 |
+| `scripts/wiki_concept_revision.py` | 用 claim graph 刷新 concept pages |
+| `scripts/wiki_grow.py` | 串起语义自增长循环 |
 | `scripts/wiki_lint.py` | 检查结构、QA、链接、index、log 和过时断言 |
 | `scripts/wiki_search.py` | 本地 markdown 搜索 |
 | `scripts/wiki_writeback.py` | 生成或应用可审阅 writeback diff |
@@ -110,6 +117,14 @@ uv run python scripts/pdf_corpus_to_markdown.py my-llm-wiki/raw \
 ```
 
 云端解析会自动重试临时失败；每个输出目录的 `manifest.json` 会记录 API 尝试次数和解析告警。
+
+有 source pages 后运行语义自增长循环：
+
+```bash
+uv run python scripts/wiki_grow.py my-llm-wiki --apply-concept-revision
+```
+
+如果 vault 只有 `raw/*_markdown/combined.md` 解析产物，还没有 source pages，加上 `--ingest-corpus`。
 
 GitHub Actions 会在 push 和 pull request 时运行这些检查。
 

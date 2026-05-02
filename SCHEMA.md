@@ -13,6 +13,7 @@ my-llm-wiki/
 |-- sources/         # stable source pages
 |-- concepts/        # evolving concept pages
 |-- qa-reports/      # append-only QA and contradiction reports
+|-- claims/          # normalized claim graph for semantic QA and growth
 |-- log-archive/     # archived log entries by month
 |-- templates/       # source and concept templates
 |-- _state/          # counters and internal state
@@ -29,6 +30,7 @@ my-llm-wiki/
 | source | `sources/` | stable understanding page for one source document |
 | draft | `drafts/` | source page before QA approval |
 | concept | `concepts/` | evolving synthesis across multiple sources |
+| claim graph | `claims/` | normalized durable claims extracted from stable source pages |
 | raw | `raw/` | immutable evidence and parsed text |
 
 ## Source Frontmatter
@@ -140,6 +142,24 @@ When new evidence conflicts with an existing concept claim:
 - cite both sources
 - do not silently overwrite older claims
 
+## Claim Graph
+
+Semantic self-growth uses `claims/claims.jsonl`. Each row is a JSON object with:
+
+- `claim_id`: stable generated identifier
+- `source_id`: `LLM-NNNN`
+- `claim_type`: `contribution` or `metric`
+- `subject`, `predicate`, `object`
+- `value` and `unit` when numeric
+- `baseline` when available
+- `evidence`: source page, parsed Markdown, page, table, or line anchor
+- `concepts`: related concept page ids
+- `confidence`
+- `needs_review`
+
+The claim graph is generated from stable source pages. It can be regenerated,
+but concept-page conclusions and QA reports remain reviewable Markdown records.
+
 ## Query Writeback
 
 Query writeback is for reusable synthesis, not every answer.
@@ -200,6 +220,12 @@ The vault may contain runtime scripts at `.open-llm-wiki/scripts/`:
 python .open-llm-wiki/scripts/pdf_corpus_report.py raw --fail-on-missing --fail-on-suspicious
 python .open-llm-wiki/scripts/pdf_corpus_to_markdown.py raw --output-root raw --no-download-images
 python .open-llm-wiki/scripts/pdf_to_markdown.py raw/source.pdf --output raw/source_markdown
+python .open-llm-wiki/scripts/wiki_ingest_corpus.py . --resume
+python .open-llm-wiki/scripts/wiki_claims.py .
+python .open-llm-wiki/scripts/wiki_semantic_qa.py . --write-report --fail-on p1
+python .open-llm-wiki/scripts/wiki_contradictions.py . --write-report
+python .open-llm-wiki/scripts/wiki_concept_revision.py . --apply
+python .open-llm-wiki/scripts/wiki_grow.py . --apply-concept-revision
 python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
 python .open-llm-wiki/scripts/wiki_search.py . "query terms"
 python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."

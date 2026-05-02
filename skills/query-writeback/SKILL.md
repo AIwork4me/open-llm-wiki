@@ -17,6 +17,8 @@ only when file changes are authorized.
 Use deterministic scripts when available:
 
 - `wiki_search.py` to find relevant source and concept pages
+- `wiki_claims.py` and `claims/claims.jsonl` to inspect normalized durable claims
+- `wiki_semantic_qa.py` when the answer depends on claim-level evidence quality
 - `wiki_writeback.py` to produce a reviewable diff before changing files
 - `wiki_lint.py` after approved writeback
 
@@ -24,6 +26,7 @@ Example:
 
 ```bash
 uv run python scripts/wiki_search.py "<vault>" "<query>" --limit 8
+uv run python scripts/wiki_claims.py "<vault>"
 uv run python scripts/wiki_writeback.py "<vault>" --target concepts/<page>.md --query "<query>" --body-file <draft.md>
 ```
 
@@ -100,6 +103,7 @@ back.
 Check every relational claim:
 
 - explicit in source: write as fact with citation
+- explicit in `claims/claims.jsonl`: prefer the normalized claim and preserve its evidence anchor
 - implied but not stated: label as inference
 - guessed from chronology or similarity: do not write as a claim
 

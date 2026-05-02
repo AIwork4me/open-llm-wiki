@@ -3,10 +3,10 @@
 **A Claude Code skill bundle and lightweight runtime for turning research
 papers into an auditable, compounding LLM wiki.**
 
-open-llm-wiki helps an agent convert papers into source pages, connect those
-pages into concept notes, and keep the knowledge base honest with independent
-QA, contradiction checks, append-only logs, deterministic lint/search tools, and
-reviewable writeback diffs.
+open-llm-wiki helps an agent convert papers into source pages, extract durable
+claims, connect those claims into concept notes, and keep the knowledge base
+honest with independent QA, contradiction checks, append-only logs,
+deterministic semantic-growth tools, and reviewable writeback diffs.
 
 Inspired by [Andrej Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
@@ -32,6 +32,7 @@ independent QA pass and an audit record.
 | `wiki-ingest` | User asks to add one paper | parsed text, draft source page, independent QA, stable source page, concept updates, contradiction report |
 | `query-writeback` | User asks a cross-source wiki question | cited answer first; optional approved writeback to concept pages |
 | `wiki-lint` | User or automation asks for a health check | deterministic report-first audit; optional approved maintenance fixes |
+| `wiki-grow` runtime | User or automation asks for semantic self-growth | claim extraction, semantic QA, contradiction scan, concept revision, lint |
 
 ![Pipeline](assets/pipeline.svg)
 
@@ -45,6 +46,12 @@ The skills coordinate judgment. The runtime scripts handle repeatable checks:
 | `scripts/pdf_corpus_report.py` | verify converted corpus coverage, manifests, parser warnings, and semantic hits |
 | `scripts/pdf_corpus_to_markdown.py` | batch-convert a PDF folder with retries, skip logic, and a TSV audit log |
 | `scripts/pdf_to_markdown.py` | convert PDFs to Markdown through a configurable layout-parsing API |
+| `scripts/wiki_ingest_corpus.py` | turn parsed Markdown corpus outputs into source/QA/concept pages |
+| `scripts/wiki_claims.py` | extract normalized claims into `claims/claims.jsonl` |
+| `scripts/wiki_semantic_qa.py` | verify extracted claims against source pages and evidence anchors |
+| `scripts/wiki_contradictions.py` | scan normalized claims for contradiction candidates |
+| `scripts/wiki_concept_revision.py` | refresh concept pages from the claim graph |
+| `scripts/wiki_grow.py` | orchestrate the semantic self-growth loop |
 | `scripts/wiki_lint.py` | verify structure, QA gates, links, index, logs, and stale claims |
 | `scripts/wiki_search.py` | local markdown search across source and concept pages |
 | `scripts/wiki_writeback.py` | generate or apply reviewable query-writeback diffs |
@@ -102,6 +109,15 @@ endpoint with `OPEN_LLM_WIKI_LAYOUT_API_URL` or `--api-url` when using a
 different layout-parsing service. Transient cloud failures are retried, and
 each output `manifest.json` records the number of API attempts.
 
+After sources exist, run the semantic growth loop:
+
+```bash
+uv run python scripts/wiki_grow.py my-llm-wiki --apply-concept-revision
+```
+
+For a parsed corpus that has `raw/*_markdown/combined.md` but no source pages
+yet, add `--ingest-corpus`.
+
 Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) if you want graph view,
 backlinks, and tag navigation.
 
@@ -118,6 +134,8 @@ backlinks, and tag navigation.
 - PDF-to-Markdown conversion sends document bytes to the configured layout
   parsing API. Use it only for documents the user is allowed to process.
 - QA reports and contradiction reports are append-only audit records.
+- Semantic self-growth writes a claim graph under `claims/`, QA reports under
+  `qa-reports/`, and concept revisions only when explicitly applied.
 
 ## Repository Layout
 
@@ -169,6 +187,8 @@ GitHub Actions runs the same checks on push and pull request.
 4. Contradictions are marked, not silently overwritten.
 5. Query writeback should be proposed as a diff before it becomes knowledge.
 6. File writes are scoped, logged, and reviewable.
+7. Long-term growth requires normalized claims, semantic QA, contradiction
+   recall, and periodic concept revision.
 
 ## License
 

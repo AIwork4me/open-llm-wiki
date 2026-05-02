@@ -10,13 +10,19 @@ from pathlib import Path
 from wiki_common import write_text
 
 
-DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "templates", "_state", "log-archive"]
+DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "claims", "templates", "_state", "log-archive"]
 RUNTIME_SCRIPTS = [
     "pdf_corpus_report.py",
     "pdf_corpus_to_markdown.py",
     "pdf_to_markdown.py",
+    "wiki_claims.py",
+    "wiki_concept_revision.py",
+    "wiki_contradictions.py",
+    "wiki_grow.py",
+    "wiki_ingest_corpus.py",
     "wiki_common.py",
     "wiki_lint.py",
+    "wiki_semantic_qa.py",
     "wiki_search.py",
     "wiki_writeback.py",
 ]
@@ -68,6 +74,7 @@ def main() -> int:
     copy_tree_contents(repo / "templates", vault / "templates", args.force)
 
     write_file(vault / "_state" / "id-counter.md", "# ID Counter\nnext: 1\n", args.force)
+    write_file(vault / "claims" / "claims.jsonl", "", args.force)
     write_file(
         vault / "index.md",
         "# LLM Wiki Index\n\n"

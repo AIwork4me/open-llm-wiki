@@ -48,6 +48,7 @@ mkdir -p ~/.claude/skills
 cp -R open-llm-wiki/skills/* ~/.claude/skills/
 
 mkdir -p my-llm-wiki/{raw,sources,concepts,drafts,qa-reports,templates,_state,log-archive}
+mkdir -p my-llm-wiki/claims
 cp open-llm-wiki/SCHEMA.md my-llm-wiki/
 cp open-llm-wiki/templates/* my-llm-wiki/templates/
 ```
@@ -79,6 +80,12 @@ Create `my-llm-wiki/log.md`:
 # Wiki Log
 ```
 
+Create `my-llm-wiki/claims/claims.jsonl`:
+
+```bash
+touch my-llm-wiki/claims/claims.jsonl
+```
+
 ## Ingest Your First Paper
 
 Copy a paper into `raw/`:
@@ -101,7 +108,8 @@ Expected result:
 4. passing drafts move to `sources/`
 5. related concept pages and `index.md` are updated
 6. a contradiction report is recorded
-7. `log.md` records the operation
+7. normalized claims can be extracted into `claims/claims.jsonl`
+8. `log.md` records the operation
 
 ## Convert PDF to Markdown
 
@@ -136,6 +144,20 @@ This sends the PDF bytes to the configured layout-parsing API. Use it only for
 documents you are allowed to process externally. The output includes
 `combined.md`, per-document Markdown files, downloaded images when enabled, and
 `manifest.json` with the API attempt count and parser warnings.
+
+## Run Semantic Self-Growth
+
+After source pages exist, run the semantic loop:
+
+```bash
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_grow.py my-llm-wiki \
+  --apply-concept-revision
+```
+
+This writes `claims/claims.jsonl`, a semantic QA report, a claim-level
+contradiction report, refreshed semantic claim matrices in concept pages, and a
+lint result. If the vault only has parsed Markdown outputs, add
+`--ingest-corpus`.
 
 ## Ask the Wiki
 

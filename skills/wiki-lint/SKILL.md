@@ -14,15 +14,19 @@ problems. Default to report-only.
 
 ## Runtime Tool
 
-Use the deterministic linter whenever available:
+Use the deterministic linter whenever available. For semantic-growth audits,
+also use claim/QA scripts when available:
 
 ```bash
 uv run python scripts/wiki_lint.py "<vault>" --fail-on p1
+uv run python scripts/wiki_claims.py "<vault>"
+uv run python scripts/wiki_semantic_qa.py "<vault>" --write-report --fail-on p1
+uv run python scripts/wiki_contradictions.py "<vault>" --write-report
 ```
 
 The script checks structure, frontmatter, QA gates, contradiction reports,
-links, index coverage, stale claims, and log format. Read its report before
-doing any manual inspection.
+links, index coverage, stale claims, claim graph availability, and log format.
+Read reports before doing any manual inspection.
 
 ## Safety Boundary
 
@@ -31,6 +35,8 @@ doing any manual inspection.
   authorizes maintenance writes.
 - Never edit files in `raw/`.
 - Never rewrite QA reports; they are append-only audit records.
+- Do not rewrite `claims/claims.jsonl` unless the user asked for semantic
+  refresh or maintenance fix mode.
 - When fixing, show a write plan first and keep edits targeted.
 
 ## Checks
@@ -38,7 +44,7 @@ doing any manual inspection.
 ### 1. Structure
 
 - required directories exist: `raw/`, `sources/`, `concepts/`, `drafts/`,
-  `qa-reports/`, `_state/`, `templates/`
+  `qa-reports/`, `claims/`, `_state/`, `templates/`
 - required root files exist: `SCHEMA.md`, `index.md`, `log.md`
 - source page filenames match `LLM-NNNN.md`
 
@@ -69,6 +75,7 @@ doing any manual inspection.
 
 - flag words such as "latest", "current", and "state of the art" when the page
   is older than 90 days
+- verify `claims/claims.jsonl` can be parsed and references stable sources
 - report `[CONTRADICTION ...]` markers that need follow-up
 - suggest concept pages for topics appearing in three or more sources
 

@@ -25,8 +25,10 @@ product is the behavior of the three skills in `skills/`:
   documents.
 - Prefer runtime scripts for repeatable operations: `wiki_init.py`,
   `pdf_corpus_report.py`, `pdf_corpus_to_markdown.py`,
-  `pdf_to_markdown.py`, `wiki_lint.py`, `wiki_search.py`,
-  `wiki_writeback.py`, and `wiki_eval.py`.
+  `pdf_to_markdown.py`, `wiki_ingest_corpus.py`, `wiki_claims.py`,
+  `wiki_semantic_qa.py`, `wiki_contradictions.py`,
+  `wiki_concept_revision.py`, `wiki_grow.py`, `wiki_lint.py`,
+  `wiki_search.py`, `wiki_writeback.py`, and `wiki_eval.py`.
 - `raw/` files are immutable evidence.
 - QA reports and contradiction reports are append-only.
 - Query writeback and lint are read-only by default.
@@ -63,6 +65,7 @@ uv run python -m skills_ref.cli validate skills/query-writeback
 uv run python -m skills_ref.cli validate skills/wiki-lint
 uv run python scripts/check_quality.py
 uv run python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+uv run python scripts/wiki_grow.py examples/minimal-vault --apply-concept-revision
 uv run python scripts/wiki_eval.py
 bash -n setup.sh
 ```

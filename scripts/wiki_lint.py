@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import date, datetime
@@ -25,7 +26,7 @@ from wiki_common import (
 )
 
 
-REQUIRED_DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "templates", "_state", "log-archive"]
+REQUIRED_DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "claims", "templates", "_state", "log-archive"]
 REQUIRED_FILES = ["SCHEMA.md", "index.md", "log.md", "_state/id-counter.md"]
 SOURCE_FIELDS = {"id", "title", "status", "created", "updated", "source", "tags"}
 CONCEPT_FIELDS = {"id", "title", "created", "updated"}
@@ -163,6 +164,33 @@ def check_claim_hygiene(vault: Path, findings: list[Finding]) -> None:
             findings.append(Finding("P2", page.relpath, "time-sensitive wording on a page older than 90 days"))
 
 
+def check_claim_graph(vault: Path, findings: list[Finding]) -> None:
+    claims_path = vault / "claims" / "claims.jsonl"
+    if not claims_path.exists():
+        findings.append(Finding("P2", "claims/claims.jsonl", "claim graph has not been generated"))
+        return
+    source_ids = {path.stem for path in (vault / "sources").glob("LLM-*.md")}
+    seen_sources: set[str] = set()
+    for number, line in enumerate(read_text(claims_path).splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            findings.append(Finding("P1", f"claims/claims.jsonl:{number}", "claim row is not valid JSON"))
+            continue
+        source_id = str(item.get("source_id", ""))
+        if source_id not in source_ids:
+            findings.append(Finding("P1", f"claims/claims.jsonl:{number}", f"claim references missing source {source_id!r}"))
+        else:
+            seen_sources.add(source_id)
+        if not item.get("claim_id") or not item.get("evidence"):
+            findings.append(Finding("P2", f"claims/claims.jsonl:{number}", "claim is missing claim_id or evidence"))
+    missing = sorted(source_ids - seen_sources)
+    if source_ids and missing:
+        findings.append(Finding("P2", "claims/claims.jsonl", f"sources missing extracted claims: {', '.join(missing[:8])}"))
+
+
 def lint(vault: Path) -> list[Finding]:
     findings: list[Finding] = []
     check_structure(vault, findings)
@@ -172,6 +200,7 @@ def lint(vault: Path) -> list[Finding]:
     check_index(vault, findings)
     check_log(vault, findings)
     check_claim_hygiene(vault, findings)
+    check_claim_graph(vault, findings)
     return findings
 
 
