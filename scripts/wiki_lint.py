@@ -27,7 +27,7 @@ from wiki_common import (
 
 
 REQUIRED_DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "claims", "templates", "_state", "log-archive"]
-REQUIRED_FILES = ["SCHEMA.md", "index.md", "log.md", "_state/id-counter.md"]
+REQUIRED_FILES = ["SCHEMA.md", "index.md", "log.md", "_state/id-counter.md", "_state/growth-queue.jsonl", "_state/source-registry.jsonl"]
 SOURCE_FIELDS = {"id", "title", "status", "created", "updated", "source", "tags"}
 CONCEPT_FIELDS = {"id", "title", "created", "updated"}
 STALE_WORDS = ("latest", "current", "state of the art", "sota", "now")
@@ -191,6 +191,20 @@ def check_claim_graph(vault: Path, findings: list[Finding]) -> None:
         findings.append(Finding("P2", "claims/claims.jsonl", f"sources missing extracted claims: {', '.join(missing[:8])}"))
 
 
+def check_state_jsonl(vault: Path, findings: list[Finding]) -> None:
+    for relpath in ["_state/growth-queue.jsonl", "_state/source-registry.jsonl", "_state/science-review-queue.jsonl"]:
+        path = vault / relpath
+        if not path.exists():
+            continue
+        for number, line in enumerate(read_text(path).splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
+                findings.append(Finding("P1", f"{relpath}:{number}", "state row is not valid JSON"))
+
+
 def lint(vault: Path) -> list[Finding]:
     findings: list[Finding] = []
     check_structure(vault, findings)
@@ -201,6 +215,7 @@ def lint(vault: Path) -> list[Finding]:
     check_log(vault, findings)
     check_claim_hygiene(vault, findings)
     check_claim_graph(vault, findings)
+    check_state_jsonl(vault, findings)
     return findings
 
 

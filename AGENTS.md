@@ -26,8 +26,10 @@ product is the behavior of the three skills in `skills/`:
 - Prefer runtime scripts for repeatable operations: `wiki_init.py`,
   `pdf_corpus_report.py`, `pdf_corpus_to_markdown.py`,
   `pdf_to_markdown.py`, `wiki_ingest_corpus.py`, `wiki_claims.py`,
-  `wiki_semantic_qa.py`, `wiki_contradictions.py`,
-  `wiki_concept_revision.py`, `wiki_grow.py`, `wiki_lint.py`,
+  `wiki_normalize_metrics.py`, `wiki_semantic_qa.py`,
+  `wiki_contradictions.py`, `wiki_science_review.py`,
+  `wiki_discover_sources.py`, `wiki_queue.py`, `wiki_concept_revision.py`,
+  `wiki_grow.py`, `wiki_lint.py`,
   `wiki_search.py`, `wiki_writeback.py`, and `wiki_eval.py`.
 - `raw/` files are immutable evidence.
 - QA reports and contradiction reports are append-only.

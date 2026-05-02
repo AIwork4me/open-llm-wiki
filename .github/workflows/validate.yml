@@ -38,8 +38,12 @@ jobs:
           uv run python scripts/wiki_claims.py --help
           uv run python scripts/wiki_concept_revision.py --help
           uv run python scripts/wiki_contradictions.py --help
+          uv run python scripts/wiki_discover_sources.py --help
           uv run python scripts/wiki_grow.py --help
           uv run python scripts/wiki_ingest_corpus.py --help
+          uv run python scripts/wiki_normalize_metrics.py --help
+          uv run python scripts/wiki_queue.py --help
+          uv run python scripts/wiki_science_review.py --help
           uv run python scripts/wiki_semantic_qa.py --help
           uv run python scripts/pdf_corpus_report.py --help
           uv run python scripts/pdf_corpus_to_markdown.py --help

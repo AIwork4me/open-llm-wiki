@@ -17,6 +17,9 @@ my-llm-wiki/
 |-- log-archive/     # archived log entries by month
 |-- templates/       # source and concept templates
 |-- _state/          # counters and internal state
+|   |-- source-registry.jsonl
+|   |-- growth-queue.jsonl
+|   `-- science-review-queue.jsonl
 |-- SCHEMA.md
 |-- README.md
 |-- index.md
@@ -156,9 +159,46 @@ Semantic self-growth uses `claims/claims.jsonl`. Each row is a JSON object with:
 - `concepts`: related concept page ids
 - `confidence`
 - `needs_review`
+- `metric_key`, `normalized_value`, `normalized_unit`, `unit_family`
+- `baseline_key`, `protocol_key`, and `normalization_warnings` after metric
+  normalization
 
 The claim graph is generated from stable source pages. It can be regenerated,
 but concept-page conclusions and QA reports remain reviewable Markdown records.
+
+## Source Discovery And Deduplication
+
+`_state/source-registry.jsonl` records discovered or ingested source candidates.
+Rows may come from `raw/`, existing `sources/`, or optional arXiv API discovery.
+Deduplication keys include:
+
+- `arxiv`
+- `doi`
+- `sha256`
+- `title_key`
+
+Discovery is advisory. It must not delete raw files or source pages.
+
+## Growth Queue
+
+`_state/growth-queue.jsonl` records durable tasks with `task_id`, `action`,
+`target`, `status`, `priority`, `due_at`, `attempts`, and `reason`.
+Supported actions are `discover`, `grow`, `science-review`, `concept-revision`,
+and `lint`. Queue runners may mark tasks done or failed, but should not edit
+raw evidence.
+Planning supports `now`, `daily`, `weekly`, and `monthly` cadence values and
+stages dependent actions a few minutes apart.
+
+## Second-Pass Scientific Review
+
+`_state/science-review-queue.jsonl` contains claims that need human or second
+LLM review. `qa-reports/science-review-YYYY-MM-DD.md` is the append-only review
+packet. This layer checks scientific meaning, metric comparability, protocol
+compatibility, and baseline fairness beyond deterministic anchor validation.
+Queue rows include `review_id`, `review_status`, `review_decision`,
+`reviewed_by`, `reviewed_at`, `review_reasons`, and `review_questions`.
+Concept revision excludes review-required claims unless the claim is explicitly
+marked `science_review: approved`.
 
 ## Query Writeback
 
@@ -222,10 +262,14 @@ python .open-llm-wiki/scripts/pdf_corpus_to_markdown.py raw --output-root raw --
 python .open-llm-wiki/scripts/pdf_to_markdown.py raw/source.pdf --output raw/source_markdown
 python .open-llm-wiki/scripts/wiki_ingest_corpus.py . --resume
 python .open-llm-wiki/scripts/wiki_claims.py .
+python .open-llm-wiki/scripts/wiki_normalize_metrics.py . --in-place
 python .open-llm-wiki/scripts/wiki_semantic_qa.py . --write-report --fail-on p1
 python .open-llm-wiki/scripts/wiki_contradictions.py . --write-report
+python .open-llm-wiki/scripts/wiki_science_review.py . --queue --write-report
+python .open-llm-wiki/scripts/wiki_discover_sources.py .
+python .open-llm-wiki/scripts/wiki_queue.py . plan
 python .open-llm-wiki/scripts/wiki_concept_revision.py . --apply
-python .open-llm-wiki/scripts/wiki_grow.py . --apply-concept-revision
+python .open-llm-wiki/scripts/wiki_grow.py . --discover-sources --plan-queue --queue-cadence weekly --science-review --apply-concept-revision
 python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
 python .open-llm-wiki/scripts/wiki_search.py . "query terms"
 python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."

@@ -8,7 +8,7 @@ import difflib
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import read_text, rel, write_text
+from wiki_common import ensure_within, read_text, rel, write_text
 
 
 def append_section(original: str, query: str, body: str, timestamp: str) -> str:
@@ -48,9 +48,7 @@ def main() -> int:
     args = parser.parse_args()
 
     vault = args.vault.resolve()
-    target = (vault / args.target).resolve()
-    if not str(target).startswith(str(vault)):
-        raise SystemExit("target must stay inside the vault")
+    target = ensure_within(vault / args.target, vault, "target must stay inside the vault")
     if "concepts" not in target.relative_to(vault).parts:
         raise SystemExit("writeback target must be under concepts/")
     if not target.exists():

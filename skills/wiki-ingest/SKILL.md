@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: "Ingest exactly one research paper or source document into an open-llm-wiki vault. Use when the user explicitly asks to add, ingest, process, or publish a paper into the wiki. The workflow parses the source, drafts a source page, runs independent QA, publishes only after the quality gate passes, extracts normalized claims, updates concepts/index/log, runs semantic QA, and records contradiction checks. Do not use for casual paper summaries or for modifying files outside the wiki vault."
+description: "Ingest exactly one research paper or source document into an open-llm-wiki vault. Use when the user explicitly asks to add, ingest, process, or publish a paper into the wiki. The workflow parses the source, drafts a source page, runs independent QA, publishes only after the quality gate passes, extracts and normalizes claims, updates concepts/index/log, runs semantic QA, prepares second-pass scientific review, updates source discovery/queue state, and records contradiction checks. Do not use for casual paper summaries or for modifying files outside the wiki vault."
 license: MIT
 metadata:
   version: "0.3.0"
@@ -23,8 +23,16 @@ or the vault:
 - `<vault>/.open-llm-wiki/scripts/wiki_grow.py`
 - `<repo>/scripts/wiki_claims.py`
 - `<vault>/.open-llm-wiki/scripts/wiki_claims.py`
+- `<repo>/scripts/wiki_normalize_metrics.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_normalize_metrics.py`
 - `<repo>/scripts/wiki_semantic_qa.py`
 - `<vault>/.open-llm-wiki/scripts/wiki_semantic_qa.py`
+- `<repo>/scripts/wiki_science_review.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_science_review.py`
+- `<repo>/scripts/wiki_discover_sources.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_discover_sources.py`
+- `<repo>/scripts/wiki_queue.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_queue.py`
 - `<repo>/scripts/wiki_contradictions.py`
 - `<vault>/.open-llm-wiki/scripts/wiki_contradictions.py`
 - `<repo>/scripts/wiki_concept_revision.py`
@@ -69,7 +77,9 @@ uv run python scripts/wiki_lint.py "<vault>" --fail-on p1
 3. Read `SCHEMA.md` before editing the wiki.
 4. Check for an existing source page with the same title, arXiv ID, DOI, or
    filename. Stop and ask before duplicating.
-5. Create a write plan listing every file that may change.
+5. Run source discovery/dedupe when available:
+   `wiki_discover_sources.py <vault>`.
+6. Create a write plan listing every file that may change.
 
 ## Pipeline
 
@@ -192,6 +202,7 @@ After publish, extract normalized claims and run semantic QA:
 
 ```bash
 uv run python scripts/wiki_claims.py "<vault>"
+uv run python scripts/wiki_normalize_metrics.py "<vault>" --in-place
 uv run python scripts/wiki_semantic_qa.py "<vault>" --write-report --fail-on p1
 ```
 
@@ -212,6 +223,12 @@ Then run claim-level contradiction scanning:
 uv run python scripts/wiki_contradictions.py "<vault>" --write-report
 ```
 
+Prepare second-pass scientific review for a human or independent LLM:
+
+```bash
+uv run python scripts/wiki_science_review.py "<vault>" --queue --write-report
+```
+
 If a contradiction is found, do not overwrite the older claim. Add both pieces
 of evidence and mark the tension with:
 
@@ -225,7 +242,8 @@ cited claims:
 
 ```bash
 uv run python scripts/wiki_concept_revision.py "<vault>" --apply
-uv run python scripts/wiki_grow.py "<vault>" --apply-concept-revision
+uv run python scripts/wiki_queue.py "<vault>" plan
+uv run python scripts/wiki_grow.py "<vault>" --discover-sources --plan-queue --queue-cadence weekly --science-review --apply-concept-revision
 ```
 
 ## Completion Criteria
@@ -235,7 +253,11 @@ The ingest is complete only when:
 - the source page is stable in `sources/`
 - QA report exists and passes
 - normalized claims exist in `claims/claims.jsonl`
+- metric claims have normalized metric/unit/baseline fields
 - semantic QA report has no P0/P1 findings
+- source registry and growth queue state exist under `_state/`
+- science review queue/report exists for claims needing human or second-LLM review
+- concept revision excludes review-required claims unless `science_review: approved`
 - evidence anchors exist for key claims
 - relevant concepts and `index.md` are updated
 - contradiction report exists

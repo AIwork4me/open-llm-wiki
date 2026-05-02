@@ -18,7 +18,9 @@ Use deterministic scripts when available:
 
 - `wiki_search.py` to find relevant source and concept pages
 - `wiki_claims.py` and `claims/claims.jsonl` to inspect normalized durable claims
+- `wiki_normalize_metrics.py` when comparisons depend on units, baselines, or protocols
 - `wiki_semantic_qa.py` when the answer depends on claim-level evidence quality
+- `wiki_science_review.py` when a high-stakes synthesis needs human or second-LLM review
 - `wiki_writeback.py` to produce a reviewable diff before changing files
 - `wiki_lint.py` after approved writeback
 
@@ -27,6 +29,7 @@ Example:
 ```bash
 uv run python scripts/wiki_search.py "<vault>" "<query>" --limit 8
 uv run python scripts/wiki_claims.py "<vault>"
+uv run python scripts/wiki_normalize_metrics.py "<vault>" --in-place
 uv run python scripts/wiki_writeback.py "<vault>" --target concepts/<page>.md --query "<query>" --body-file <draft.md>
 ```
 

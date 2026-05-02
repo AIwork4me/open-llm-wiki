@@ -48,10 +48,14 @@ The skills coordinate judgment. The runtime scripts handle repeatable checks:
 | `scripts/pdf_to_markdown.py` | convert PDFs to Markdown through a configurable layout-parsing API |
 | `scripts/wiki_ingest_corpus.py` | turn parsed Markdown corpus outputs into source/QA/concept pages |
 | `scripts/wiki_claims.py` | extract normalized claims into `claims/claims.jsonl` |
+| `scripts/wiki_normalize_metrics.py` | normalize metric names, units, baselines, and numeric values |
 | `scripts/wiki_semantic_qa.py` | verify extracted claims against source pages and evidence anchors |
 | `scripts/wiki_contradictions.py` | scan normalized claims for contradiction candidates |
-| `scripts/wiki_concept_revision.py` | refresh concept pages from the claim graph |
-| `scripts/wiki_grow.py` | orchestrate the semantic self-growth loop |
+| `scripts/wiki_science_review.py` | prepare second-pass LLM/human scientific review queues and packets |
+| `scripts/wiki_discover_sources.py` | discover raw/arXiv candidates and detect duplicates by arXiv, DOI, hash, and title |
+| `scripts/wiki_queue.py` | plan and run a durable growth queue for scheduled wiki maintenance |
+| `scripts/wiki_concept_revision.py` | refresh concept pages from review-eligible claims |
+| `scripts/wiki_grow.py` | orchestrate discovery, claims, normalization, QA, review, contradictions, revision, and lint |
 | `scripts/wiki_lint.py` | verify structure, QA gates, links, index, logs, and stale claims |
 | `scripts/wiki_search.py` | local markdown search across source and concept pages |
 | `scripts/wiki_writeback.py` | generate or apply reviewable query-writeback diffs |
@@ -112,11 +116,20 @@ each output `manifest.json` records the number of API attempts.
 After sources exist, run the semantic growth loop:
 
 ```bash
-uv run python scripts/wiki_grow.py my-llm-wiki --apply-concept-revision
+uv run python scripts/wiki_grow.py my-llm-wiki \
+  --discover-sources \
+  --plan-queue \
+  --queue-cadence weekly \
+  --science-review \
+  --apply-concept-revision
 ```
 
 For a parsed corpus that has `raw/*_markdown/combined.md` but no source pages
 yet, add `--ingest-corpus`.
+
+Concept refreshes omit claims that require second-pass scientific review unless
+the claim is explicitly marked `science_review: approved`, so uncertain metrics
+do not become durable synthesis by accident.
 
 Open `my-llm-wiki/` in [Obsidian](https://obsidian.md) if you want graph view,
 backlinks, and tag navigation.
@@ -134,8 +147,9 @@ backlinks, and tag navigation.
 - PDF-to-Markdown conversion sends document bytes to the configured layout
   parsing API. Use it only for documents the user is allowed to process.
 - QA reports and contradiction reports are append-only audit records.
-- Semantic self-growth writes a claim graph under `claims/`, QA reports under
-  `qa-reports/`, and concept revisions only when explicitly applied.
+- Semantic self-growth writes a claim graph under `claims/`, source/discovery
+  and queue state under `_state/`, QA/review reports under `qa-reports/`, and
+  concept revisions only when explicitly applied.
 
 ## Repository Layout
 

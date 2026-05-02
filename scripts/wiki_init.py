@@ -18,10 +18,14 @@ RUNTIME_SCRIPTS = [
     "wiki_claims.py",
     "wiki_concept_revision.py",
     "wiki_contradictions.py",
+    "wiki_discover_sources.py",
     "wiki_grow.py",
     "wiki_ingest_corpus.py",
+    "wiki_normalize_metrics.py",
+    "wiki_queue.py",
     "wiki_common.py",
     "wiki_lint.py",
+    "wiki_science_review.py",
     "wiki_semantic_qa.py",
     "wiki_search.py",
     "wiki_writeback.py",
@@ -74,6 +78,9 @@ def main() -> int:
     copy_tree_contents(repo / "templates", vault / "templates", args.force)
 
     write_file(vault / "_state" / "id-counter.md", "# ID Counter\nnext: 1\n", args.force)
+    write_file(vault / "_state" / "growth-queue.jsonl", "", args.force)
+    write_file(vault / "_state" / "science-review-queue.jsonl", "", args.force)
+    write_file(vault / "_state" / "source-registry.jsonl", "", args.force)
     write_file(vault / "claims" / "claims.jsonl", "", args.force)
     write_file(
         vault / "index.md",

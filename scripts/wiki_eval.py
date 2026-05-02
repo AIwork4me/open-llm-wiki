@@ -51,7 +51,20 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         growth_vault = Path(tmp) / "growth-vault"
         shutil.copytree(vault, growth_vault)
-        run([sys.executable, "scripts/wiki_grow.py", str(growth_vault), "--apply-concept-revision"])
+        run(
+            [
+                sys.executable,
+                "scripts/wiki_grow.py",
+                str(growth_vault),
+                "--discover-sources",
+                "--plan-queue",
+                "--queue-cadence",
+                "weekly",
+                "--science-review",
+                "--apply-concept-revision",
+            ]
+        )
+        run([sys.executable, "scripts/wiki_queue.py", str(growth_vault), "list"])
         run([sys.executable, "scripts/wiki_lint.py", str(growth_vault), "--fail-on", "p1"])
 
         test_vault = Path(tmp) / "vault"

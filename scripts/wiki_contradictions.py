@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import json_dump, read_text, write_text
+from wiki_common import ensure_within, json_dump, read_text, write_text
 
 
 def load_claims(path: Path) -> list[dict[str, object]]:
@@ -29,8 +29,8 @@ def numeric_conflicts(claims: list[dict[str, object]], tolerance: float) -> list
     for claim in claims:
         if claim.get("claim_type") != "metric" or claim.get("value") is None:
             continue
-        predicate = normalize_predicate(str(claim.get("predicate", "")))
-        unit = str(claim.get("unit", "")).lower()
+        predicate = str(claim.get("metric_key") or normalize_predicate(str(claim.get("predicate", ""))))
+        unit = str(claim.get("normalized_unit") or claim.get("unit", "")).lower()
         if not predicate or not unit:
             continue
         for concept in claim.get("concepts", []):
@@ -41,7 +41,7 @@ def numeric_conflicts(claims: list[dict[str, object]], tolerance: float) -> list
         source_ids = {str(item.get("source_id")) for item in items}
         if len(source_ids) < 2:
             continue
-        values = [float(item["value"]) for item in items]
+        values = [float(item.get("normalized_value") if item.get("normalized_value") is not None else item["value"]) for item in items]
         low, high = min(values), max(values)
         if high == 0:
             continue
@@ -130,9 +130,11 @@ def main() -> int:
     else:
         print(markdown_report(vault, conflicts, markers))
     if args.write_report:
-        report = (args.report or vault / "qa-reports" / f"claim-contradictions-{datetime.now().strftime('%Y-%m-%d')}.md").resolve()
-        if not str(report).startswith(str(vault)):
-            raise SystemExit("contradiction report must stay inside the vault")
+        report = ensure_within(
+            args.report or vault / "qa-reports" / f"claim-contradictions-{datetime.now().strftime('%Y-%m-%d')}.md",
+            vault,
+            "contradiction report must stay inside the vault",
+        )
         write_text(report, markdown_report(vault, conflicts, markers))
         print(f"report: {report}")
     return 1 if args.fail_on_candidate and conflicts else 0

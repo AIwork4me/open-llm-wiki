@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import WIKILINK_RE, json_dump, parse_frontmatter, read_text, rel, write_text
+from wiki_common import WIKILINK_RE, ensure_within, json_dump, parse_frontmatter, read_text, rel, write_text
 
 
 NUMBER_RE = re.compile(r"([-+]?\d+(?:,\d{3})*(?:\.\d+)?)\s*([A-Za-z%]+)?")
@@ -180,12 +180,8 @@ def main() -> int:
     vault = args.vault.resolve()
     if not (vault / "sources").is_dir():
         raise SystemExit(f"sources directory not found: {vault / 'sources'}")
-    output = (args.output or vault / "claims" / "claims.jsonl").resolve()
-    if not str(output).startswith(str(vault)):
-        raise SystemExit("claim output must stay inside the vault")
-    report_path = (args.report or vault / "claims" / "claim-report.md").resolve()
-    if not str(report_path).startswith(str(vault)):
-        raise SystemExit("claim report must stay inside the vault")
+    output = ensure_within(args.output or vault / "claims" / "claims.jsonl", vault, "claim output must stay inside the vault")
+    report_path = ensure_within(args.report or vault / "claims" / "claim-report.md", vault, "claim report must stay inside the vault")
 
     claims = extract_claims(vault)
     write_jsonl(output, claims)

@@ -13,7 +13,7 @@ It contains:
 - one concept page
 - one QA report
 - one contradiction report
-- one normalized claim graph
+- one normalized claim graph plus queue/discovery state
 - one vault-local schema
 - an index
 - an operation log
@@ -57,12 +57,13 @@ Run wiki lint on examples/minimal-vault.
 The expected result is a report-only health check with no required fixes.
 
 The runtime smoke test also verifies search, writeback proposal generation, and
-fresh vault initialization. Semantic-growth scripts can extract claims, run
-semantic QA, scan contradictions, and refresh concept pages:
+fresh vault initialization. Semantic-growth scripts can discover and dedupe
+sources, plan queue work, extract and normalize claims, run semantic QA, prepare
+science review, scan contradictions, and refresh concept pages:
 
 ```bash
 uv run python scripts/wiki_eval.py
-uv run python scripts/wiki_grow.py examples/minimal-vault --apply-concept-revision
+uv run python scripts/wiki_grow.py examples/minimal-vault --discover-sources --plan-queue --queue-cadence weekly --science-review --apply-concept-revision
 ```
 
 PDF-to-Markdown conversion, corpus ingestion, claim extraction, semantic QA,

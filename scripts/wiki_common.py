@@ -53,6 +53,16 @@ def rel(path: Path, root: Path) -> str:
     return path.resolve().relative_to(root.resolve()).as_posix()
 
 
+def ensure_within(path: Path, root: Path, message: str) -> Path:
+    resolved_path = path.resolve()
+    resolved_root = root.resolve()
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise SystemExit(message) from exc
+    return resolved_path
+
+
 def parse_frontmatter(path: Path) -> tuple[dict[str, str], str]:
     text = read_text(path)
     if not text.startswith("---\n"):

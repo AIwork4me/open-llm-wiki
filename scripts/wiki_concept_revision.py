@@ -28,9 +28,29 @@ def claim_label(claim: dict[str, object]) -> str:
     return f"{predicate}: {obj}"[:160]
 
 
-def semantic_section(concept_id: str, claims: list[dict[str, object]]) -> str:
+def review_reasons(claim: dict[str, object]) -> list[str]:
+    reasons = list(claim.get("normalization_warnings", []))
+    if claim.get("needs_review"):
+        reasons.append("claim_marked_needs_review")
+    if claim.get("claim_type") == "metric" and (not claim.get("baseline_key") or "generic_metric_name" in reasons):
+        reasons.append("scientific_context_review")
+    return sorted(set(str(reason) for reason in reasons if reason))
+
+
+def is_review_approved(claim: dict[str, object]) -> bool:
+    return str(claim.get("science_review", "")).lower() == "approved"
+
+
+def semantic_section(concept_id: str, claims: list[dict[str, object]], include_review_required: bool) -> str:
     rows = []
-    for claim in sorted(claims, key=lambda item: (str(item.get("source_id")), str(item.get("claim_id"))))[:24]:
+    held_for_review = 0
+    for claim in sorted(claims, key=lambda item: (str(item.get("source_id")), str(item.get("claim_id")))):
+        reasons = review_reasons(claim)
+        if reasons and not include_review_required and not is_review_approved(claim):
+            held_for_review += 1
+            continue
+        if len(rows) >= 24:
+            break
         rows.append(
             "| [[{source_id}]] | {claim_type} | {claim} | {evidence} |".format(
                 source_id=claim.get("source_id", ""),
@@ -48,7 +68,8 @@ def semantic_section(concept_id: str, claims: list[dict[str, object]]) -> str:
         f"{table}\n"
         f"{END}\n\n"
         "## Revision Notes\n\n"
-        "- This section is generated from `claims/claims.jsonl` and should be reviewed during periodic concept revision.\n"
+        "- This section is generated from `claims/claims.jsonl` and excludes claims that require second-pass scientific review unless they are marked `science_review: approved`.\n"
+        f"- Held for review in this concept: {held_for_review}.\n"
         "- Treat cross-source comparisons as inference unless units, baselines, and evaluation protocol are aligned.\n"
     )
 
@@ -80,6 +101,7 @@ def main() -> int:
     parser.add_argument("--claims", type=Path, help="Defaults to <vault>/claims/claims.jsonl.")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--limit", type=int, default=0, help="Maximum concept pages to process; 0 means all.")
+    parser.add_argument("--include-review-required", action="store_true", help="Include claims that have not passed second-pass scientific review.")
     args = parser.parse_args()
 
     vault = args.vault.resolve()
@@ -98,7 +120,7 @@ def main() -> int:
         if not path.exists():
             continue
         before = read_text(path)
-        after = replace_section(before, semantic_section(concept_id, items))
+        after = replace_section(before, semantic_section(concept_id, items, args.include_review_required))
         if before != after:
             changed.append(path.relative_to(vault).as_posix())
             if args.apply:

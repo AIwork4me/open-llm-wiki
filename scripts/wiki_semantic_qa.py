@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import SOURCE_ID_RE, json_dump, read_text, write_text
+from wiki_common import SOURCE_ID_RE, ensure_within, json_dump, read_text, write_text
 
 
 @dataclass
@@ -70,6 +70,8 @@ def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
         if not evidence:
             issues.append(Issue("P1", subject, "claim has no evidence anchor"))
             continue
+        if claim.get("claim_type") == "metric" and "normalized_value" not in claim:
+            issues.append(Issue("P2", subject, "metric claim has not been normalized"))
         path, line_number = evidence_target(vault, evidence)
         if path is None:
             issues.append(Issue("P2", subject, f"evidence is human-readable but not machine-resolvable: {evidence}"))
@@ -158,9 +160,11 @@ def main() -> int:
     else:
         print(markdown_report(vault, claims_path, claims, issues))
     if args.write_report:
-        report = (args.report or vault / "qa-reports" / f"semantic-qa-{datetime.now().strftime('%Y-%m-%d')}.md").resolve()
-        if not str(report).startswith(str(vault)):
-            raise SystemExit("semantic QA report must stay inside the vault")
+        report = ensure_within(
+            args.report or vault / "qa-reports" / f"semantic-qa-{datetime.now().strftime('%Y-%m-%d')}.md",
+            vault,
+            "semantic QA report must stay inside the vault",
+        )
         write_text(report, markdown_report(vault, claims_path, claims, issues))
         print(f"report: {report}")
     return 1 if should_fail(issues, args.fail_on) else 0

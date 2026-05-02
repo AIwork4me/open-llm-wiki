@@ -37,9 +37,13 @@ Skill 负责判断和协调；runtime 脚本负责可重复检查：
 | `scripts/pdf_to_markdown.py` | 通过可配置的 layout parsing API 将 PDF 转成 Markdown |
 | `scripts/wiki_ingest_corpus.py` | 将解析后的 Markdown 语料发布为 source/QA/concept 页面 |
 | `scripts/wiki_claims.py` | 抽取 normalized claims 到 `claims/claims.jsonl` |
+| `scripts/wiki_normalize_metrics.py` | 归一化 metric 名称、单位、baseline 和数值 |
 | `scripts/wiki_semantic_qa.py` | 按 evidence anchor 检查 claim 质量 |
 | `scripts/wiki_contradictions.py` | 基于 normalized claims 扫描矛盾候选 |
-| `scripts/wiki_concept_revision.py` | 用 claim graph 刷新 concept pages |
+| `scripts/wiki_science_review.py` | 生成二级 LLM/人工科学审稿队列和审稿包 |
+| `scripts/wiki_discover_sources.py` | 发现 raw/arXiv 候选并按 arXiv、DOI、hash、标题去重 |
+| `scripts/wiki_queue.py` | 规划并执行持久化增长队列 |
+| `scripts/wiki_concept_revision.py` | 用已通过门禁的 claims 刷新 concept pages |
 | `scripts/wiki_grow.py` | 串起语义自增长循环 |
 | `scripts/wiki_lint.py` | 检查结构、QA、链接、index、log 和过时断言 |
 | `scripts/wiki_search.py` | 本地 markdown 搜索 |
@@ -121,10 +125,18 @@ uv run python scripts/pdf_corpus_to_markdown.py my-llm-wiki/raw \
 有 source pages 后运行语义自增长循环：
 
 ```bash
-uv run python scripts/wiki_grow.py my-llm-wiki --apply-concept-revision
+uv run python scripts/wiki_grow.py my-llm-wiki \
+  --discover-sources \
+  --plan-queue \
+  --queue-cadence weekly \
+  --science-review \
+  --apply-concept-revision
 ```
 
 如果 vault 只有 `raw/*_markdown/combined.md` 解析产物，还没有 source pages，加上 `--ingest-corpus`。
+
+概念页刷新默认跳过需要二级科学审稿的 claim；只有显式标记为
+`science_review: approved` 的高风险 claim 才会进入长期 synthesis。
 
 GitHub Actions 会在 push 和 pull request 时运行这些检查。
 

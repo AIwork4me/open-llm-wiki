@@ -19,9 +19,12 @@ also use claim/QA scripts when available:
 
 ```bash
 uv run python scripts/wiki_lint.py "<vault>" --fail-on p1
+uv run python scripts/wiki_discover_sources.py "<vault>"
 uv run python scripts/wiki_claims.py "<vault>"
+uv run python scripts/wiki_normalize_metrics.py "<vault>" --in-place
 uv run python scripts/wiki_semantic_qa.py "<vault>" --write-report --fail-on p1
 uv run python scripts/wiki_contradictions.py "<vault>" --write-report
+uv run python scripts/wiki_science_review.py "<vault>" --queue --write-report
 ```
 
 The script checks structure, frontmatter, QA gates, contradiction reports,
@@ -37,6 +40,8 @@ Read reports before doing any manual inspection.
 - Never rewrite QA reports; they are append-only audit records.
 - Do not rewrite `claims/claims.jsonl` unless the user asked for semantic
   refresh or maintenance fix mode.
+- Queue files under `_state/` are state, not evidence. They may be updated by
+  explicit maintenance or scheduled growth runs.
 - When fixing, show a write plan first and keep edits targeted.
 
 ## Checks
@@ -76,6 +81,8 @@ Read reports before doing any manual inspection.
 - flag words such as "latest", "current", and "state of the art" when the page
   is older than 90 days
 - verify `claims/claims.jsonl` can be parsed and references stable sources
+- verify `_state/source-registry.jsonl` and `_state/growth-queue.jsonl` are valid JSONL
+- inspect science-review queue items before automatic writeback and keep review-required claims out of concept revisions until approved
 - report `[CONTRADICTION ...]` markers that need follow-up
 - suggest concept pages for topics appearing in three or more sources
 

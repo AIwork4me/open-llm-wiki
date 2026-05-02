@@ -151,12 +151,19 @@ After source pages exist, run the semantic loop:
 
 ```bash
 python my-llm-wiki/.open-llm-wiki/scripts/wiki_grow.py my-llm-wiki \
+  --discover-sources \
+  --plan-queue \
+  --queue-cadence weekly \
+  --science-review \
   --apply-concept-revision
 ```
 
-This writes `claims/claims.jsonl`, a semantic QA report, a claim-level
+This writes `_state/source-registry.jsonl`, `_state/growth-queue.jsonl`,
+`_state/science-review-queue.jsonl`, `claims/claims.jsonl`, normalized claim
+fields, a semantic QA report, a second-pass science review packet, a claim-level
 contradiction report, refreshed semantic claim matrices in concept pages, and a
-lint result. If the vault only has parsed Markdown outputs, add
+lint result. Concept refresh skips review-required claims until they are marked
+`science_review: approved`. If the vault only has parsed Markdown outputs, add
 `--ingest-corpus`.
 
 ## Ask the Wiki

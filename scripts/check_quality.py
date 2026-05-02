@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -104,8 +105,12 @@ def check_docs() -> None:
         "scripts/wiki_claims.py",
         "scripts/wiki_concept_revision.py",
         "scripts/wiki_contradictions.py",
+        "scripts/wiki_discover_sources.py",
         "scripts/wiki_grow.py",
         "scripts/wiki_ingest_corpus.py",
+        "scripts/wiki_normalize_metrics.py",
+        "scripts/wiki_queue.py",
+        "scripts/wiki_science_review.py",
         "scripts/pdf_corpus_report.py",
         "scripts/pdf_corpus_to_markdown.py",
         "scripts/pdf_to_markdown.py",
@@ -142,6 +147,8 @@ def check_minimal_vault() -> None:
         "index.md",
         "log.md",
         "_state/id-counter.md",
+        "_state/growth-queue.jsonl",
+        "_state/source-registry.jsonl",
         "claims/claims.jsonl",
         "sources/LLM-0001.md",
         "concepts/attention-mechanisms.md",
@@ -184,8 +191,12 @@ def run_runtime_checks() -> None:
         [sys.executable, "scripts/wiki_claims.py", "--help"],
         [sys.executable, "scripts/wiki_concept_revision.py", "--help"],
         [sys.executable, "scripts/wiki_contradictions.py", "--help"],
+        [sys.executable, "scripts/wiki_discover_sources.py", "--help"],
         [sys.executable, "scripts/wiki_grow.py", "--help"],
         [sys.executable, "scripts/wiki_ingest_corpus.py", "--help"],
+        [sys.executable, "scripts/wiki_normalize_metrics.py", "--help"],
+        [sys.executable, "scripts/wiki_queue.py", "--help"],
+        [sys.executable, "scripts/wiki_science_review.py", "--help"],
         [sys.executable, "scripts/wiki_semantic_qa.py", "--help"],
         [sys.executable, "scripts/pdf_corpus_report.py", "--help"],
         [sys.executable, "scripts/pdf_corpus_to_markdown.py", "--help"],
@@ -199,12 +210,37 @@ def run_runtime_checks() -> None:
             fail(f"runtime check failed: {' '.join(command)}")
 
 
+def check_safety_boundaries() -> None:
+    vault = ROOT / "examples" / "minimal-vault"
+    with tempfile.TemporaryDirectory() as tmp:
+        outside = Path(tmp) / "outside.jsonl"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_normalize_metrics.py",
+                str(vault),
+                "--output",
+                str(outside),
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            fail("normalization accepted an output path outside the vault")
+        if "must stay inside the vault" not in result.stdout:
+            print(result.stdout)
+            fail("normalization boundary failure did not explain the vault constraint")
+
+
 def main() -> None:
     check_skills()
     check_docs()
     check_minimal_vault()
     check_setup_script()
     run_runtime_checks()
+    check_safety_boundaries()
     print("quality checks passed")
 
 
