@@ -1,0 +1,136 @@
+# Quick Start
+
+This guide sets up open-llm-wiki for Claude Code. The skills may also be adapted
+to other agents, but Claude Code is the default path.
+
+## Prerequisites
+
+- Git
+- Bash
+- Claude Code with access to `~/.claude/skills/`
+- A workspace directory for your wiki vault
+
+Optional:
+
+- PyMuPDF for local PDF parsing
+- A cloud OCR provider if you explicitly want OCR for layout-heavy documents
+
+## Option A: Scripted Setup
+
+Inspect before running:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AIwork4me/open-llm-wiki/main/setup.sh -o setup.sh
+less setup.sh
+bash setup.sh my-llm-wiki
+```
+
+The script:
+
+- creates `my-llm-wiki/`
+- copies `SCHEMA.md` and templates
+- initializes `index.md`, `log.md`, and `_state/id-counter.md`
+- installs the three skills into `~/.claude/skills/`
+
+Override the skill directory when needed:
+
+```bash
+OPEN_LLM_WIKI_SKILL_DIR="$HOME/.openclaw-autoclaw/skills" bash setup.sh my-llm-wiki
+```
+
+## Option B: Manual Setup
+
+```bash
+git clone https://github.com/AIwork4me/open-llm-wiki.git
+mkdir -p ~/.claude/skills
+cp -R open-llm-wiki/skills/* ~/.claude/skills/
+
+mkdir -p my-llm-wiki/{raw,sources,concepts,drafts,qa-reports,templates,_state,log-archive}
+cp open-llm-wiki/SCHEMA.md my-llm-wiki/
+cp open-llm-wiki/templates/* my-llm-wiki/templates/
+```
+
+Create `my-llm-wiki/_state/id-counter.md`:
+
+```markdown
+# ID Counter
+next: 1
+```
+
+Create `my-llm-wiki/index.md`:
+
+```markdown
+# LLM Wiki Index
+
+## Sources
+| ID | Title | Tags |
+| --- | --- | --- |
+
+## Concepts
+| Concept | Key Question | Sources |
+| --- | --- | --- |
+```
+
+Create `my-llm-wiki/log.md`:
+
+```markdown
+# Wiki Log
+```
+
+## Ingest Your First Paper
+
+Copy a paper into `raw/`:
+
+```bash
+cp ~/papers/attention.pdf my-llm-wiki/raw/
+```
+
+Ask Claude Code:
+
+```text
+Ingest this paper: my-llm-wiki/raw/attention.pdf
+```
+
+Expected result:
+
+1. parsed text is written under `raw/`
+2. a draft source page is created under `drafts/`
+3. independent QA writes `qa-reports/LLM-NNNN.md`
+4. passing drafts move to `sources/`
+5. related concept pages and `index.md` are updated
+6. a contradiction report is recorded
+7. `log.md` records the operation
+
+## Ask the Wiki
+
+Ask a synthesis question:
+
+```text
+How did attention mechanisms evolve from RNN seq2seq to Transformer?
+```
+
+The `query-writeback` skill answers from wiki pages first. If the answer is
+valuable enough to preserve, it proposes a writeback plan. File changes happen
+only after approval unless you have explicitly pre-authorized automatic
+writeback.
+
+## Run a Health Check
+
+```text
+Run wiki lint on my-llm-wiki.
+```
+
+Lint is report-only by default. Ask for fix mode only when you want maintenance
+writes such as index repair or log archival.
+
+## Validate the Repository
+
+From the repo root:
+
+```bash
+uvx --from skills-ref agentskills validate skills/wiki-ingest
+uvx --from skills-ref agentskills validate skills/query-writeback
+uvx --from skills-ref agentskills validate skills/wiki-lint
+python scripts/check_quality.py
+bash -n setup.sh
+```

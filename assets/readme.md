@@ -1,16 +1,15 @@
 # Assets
 
-Screenshots and diagrams for the README.
+Images and diagrams used by the documentation.
 
-## Required
+Current files:
 
-- `graph-view.png` — Obsidian graph view showing source + concept page connections
-- `concept-page.png` — A real concept page after multiple papers feed into it
-- `pipeline.png` — The three-pipeline architecture diagram
+- `pipeline.svg`: three-pipeline architecture diagram
 
-## How to capture
+Optional future assets:
 
-1. Open the example vault in Obsidian
-2. Graph View → screenshot
-3. Open a concept page → screenshot
-4. Replace these placeholders
+- `graph-view.png`: Obsidian graph view for the example vault
+- `concept-page.png`: rendered concept page screenshot
+- `demo.gif`: short end-to-end ingest demo
+
+Do not commit private papers, screenshots with personal data, or API keys.

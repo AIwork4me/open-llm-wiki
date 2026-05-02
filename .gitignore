@@ -7,10 +7,14 @@ Thumbs.db
 *.swo
 *~
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Private data (users should add their own wiki content to .gitignore)
-raw/
-qa-reports/
-log-archive/
+/raw/
+/qa-reports/
+/log-archive/
 # Exclude log.md at root only (minimal-vault example is tracked)
 /log.md
 /_state/

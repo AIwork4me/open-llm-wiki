@@ -7,29 +7,39 @@ updated: 2026-05-01
 
 # Attention Mechanisms
 
-> 从 RNN 的辅助机制到整个架构的核心——注意力机制的演化是理解现代 LLM 的关键线索。
+> Attention lets a model weight relevant tokens directly instead of relying only
+> on sequential recurrence.
 
 ## Why It Matters
 
-Attention 让模型"看向"输入中相关的部分，而不是被序列顺序束缚。从 Bahdanau 的 additive attention 到 Transformer 的 multi-head self-attention，这个演化路径解释了为什么现代 LLM 能处理长文本、并行训练、并且理解复杂关系。
+Attention is central to modern language models because it gives each token a
+direct path to other relevant tokens. In the Transformer, self-attention replaced
+recurrent sequence processing as the main computation path. [[LLM-0001]]
 
-## Key Insights
+## Current Understanding
 
-- **Attention 不是 Transformer 发明的**，但 Transformer 证明了 attention alone 就够了。[[LLM-0001]]
-- **Multi-head 是关键创新**：不同头关注不同模式（语法、语义、共指），比单一注意力表达力强得多。
-- **位置编码是补丁**：attention 不感知顺序，所以需要外部注入。后来 RoPE 用旋转矩阵优雅解决了这个问题。
+- Transformer did not invent attention, but it showed that a network built
+  primarily from multi-head self-attention could outperform strong recurrent
+  and convolutional sequence models on machine translation. [[LLM-0001]]
+- Multi-head attention is useful because different heads can attend to different
+  relationship patterns in parallel. [[LLM-0001]]
+- Positional encoding is required because pure self-attention does not encode
+  token order by itself. [[LLM-0001]]
 
-## Innovation Timeline
+## Timeline
 
-| When | What | Source | Key Idea |
-|------|------|--------|----------|
-| 2015 | Additive Attention | Bahdanau | Alignment between seq2seq states |
-| 2017 | Multi-Head Self-Attention | [[LLM-0001]] | Pure attention, no recurrence |
+| Date | Change | Source | Evidence |
+| --- | --- | --- | --- |
+| 2017-06 | Transformer uses multi-head self-attention as the core sequence model | [[LLM-0001]] | 6-layer encoder-decoder, 8 attention heads in base model |
 
 ## Open Questions
 
-- 线性注意力（Linformer、Flash Attention）能否在保持表达能力的同时突破 O(n²) 复杂度？
-- 多模态注意力（文本+图像）需要怎样的架构变化？
+- Which later positional encoding variants preserve the most long-context
+  performance?
+- When does sparse or linear attention preserve enough quality to replace full
+  attention?
 
 ## Sources
-- [[LLM-0001|Attention Is All You Need]] — 纯 attention 架构的开创性工作
+
+- [[LLM-0001|Attention Is All You Need]] - Transformer paper introducing the
+  attention-only sequence modeling architecture.

@@ -10,31 +10,38 @@ tags: [tag1, tag2, tag3]
 
 # Paper Title
 
-## 一句话
-[Key contribution in one sentence, with the most important number]
+## One-Sentence Contribution
 
-## 核心思路
-[What problem did they solve, and how? Why is this approach interesting?]
+State the main contribution and include the most important number when one
+exists.
 
-## 关键数据
-[Hard numbers extracted from Tables — benchmarks, parameters, training scale. Write this section FIRST.]
+## Core Idea
 
-| Metric | Value | Baseline | Notes |
-|--------|-------|----------|-------|
-| ... | ... | ... | ... |
+Explain the problem, method, and why the method matters.
 
-## 演化位置
-[Where in the timeline? ASCII tree if applicable]
+## Key Data
 
+Write this section first. Prefer tables over figures. Name baselines.
+
+| Metric | Value | Baseline | Evidence |
+| --- | --- | --- | --- |
+| ... | ... | ... | Table/Figure/Section ... |
+
+## Timeline Position
+
+Describe where this source fits relative to prior and later work.
+
+```text
+Prior work
+`-- This paper
+    `-- Later related work
 ```
-Parent
-├── This paper
-│   └── Successor (if known)
-```
 
-## 我的判断
-[Personal insight — what's genuinely new? what's marketing? what matters?]
+## Interpretation
 
-## 链接
+What is genuinely new? What is limited, fragile, or mostly packaging?
+
+## Links
+
 - Related concepts: [[concept-name]]
 - Related sources: [[LLM-XXXX]]

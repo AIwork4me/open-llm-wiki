@@ -5,29 +5,34 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 ---
 
-# Concept Name
+# Concept Display Name
 
-> One-line summary of what this concept means in our understanding.
+> One-sentence explanation of what this concept means in the current wiki.
 
 ## Why It Matters
-[Why this concept is worth tracking. What question does it answer?]
 
-## Key Insights
-[Accumulated understanding from multiple sources. Each claim cites its source.]
+Explain the research question this concept helps answer.
 
-- Insight 1. [[LLM-XXXX]]
-- Insight 2. [[LLM-YYYY]]
+## Current Understanding
 
-## Innovation Timeline
-[If applicable, how this concept evolved across papers]
+Write synthesis across sources. Cite every important claim.
 
-| When | What | Source | Key Result |
-|------|------|--------|-----------|
-| ... | ... | [[LLM-XXXX]] | ... |
+- Insight with citation. [[LLM-XXXX]]
+- Inference clearly labeled as inference. [[LLM-YYYY]]
+
+## Timeline
+
+Use this section only when the concept has a meaningful evolution.
+
+| Date | Change | Source | Evidence |
+| --- | --- | --- | --- |
+| YYYY-MM | ... | [[LLM-XXXX]] | ... |
 
 ## Open Questions
-[Things we don't know yet, or where evidence is conflicting]
+
+- Question that needs more evidence.
+- Potential contradiction to monitor.
 
 ## Sources
-- [[LLM-XXXX|Short Title]] — one-line description
-- [[LLM-YYYY|Short Title]] — one-line description
+
+- [[LLM-XXXX|Short Title]] - one-line description

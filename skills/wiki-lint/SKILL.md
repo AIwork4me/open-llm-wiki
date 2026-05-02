@@ -1,62 +1,98 @@
 ---
 name: wiki-lint
-description: Periodic wiki health check. Detects contradictions, orphan pages, missing cross-references, stale claims, format violations, and log archival. Designed for Cron execution.
-version: 0.1.0
+description: "Run a health check for an open-llm-wiki vault. Use when the user asks to lint, audit, validate, or periodically check wiki quality. The default mode is report-only: inspect schema compliance, QA coverage, links, stale claims, contradictions, and log health. Modify files only when the user explicitly requests fix mode or a scheduled automation has been configured to allow safe maintenance writes."
+license: MIT
+metadata:
+  version: "0.2.0"
+  reviewed-for: "Claude Code Skills quality"
 ---
 
 # Wiki Lint
 
-Periodic health check for the LLM Wiki. Runs via Cron (daily 9:00 AM) or on-demand.
+Audit an open-llm-wiki vault for structural, traceability, and maintenance
+problems. Default to report-only.
 
-## What to Check
+## Safety Boundary
 
-### 1. Format Compliance
-- [ ] Every source page in `sources/` has complete frontmatter (id, title, status, created, source, tags)
-- [ ] Every concept page in `concepts/` has at least id, title, status, sources
-- [ ] No `status: draft` pages in `sources/` (should be in `drafts/`)
-- [ ] All IDs are sequential (no gaps in LLM-NNNN series)
+- Read-only by default.
+- Fix mode requires explicit user approval or an automation prompt that clearly
+  authorizes maintenance writes.
+- Never edit files in `raw/`.
+- Never rewrite QA reports; they are append-only audit records.
+- When fixing, show a write plan first and keep edits targeted.
 
-### 2. QA Coverage
-- [ ] Every `status: stable` source page has a corresponding `qa-reports/LLM-NNNN.md`
-- [ ] No qa-reports have been modified after creation (append-only check)
-- [ ] Report any source page without QA report → alert chairman
+## Checks
 
-### 3. Cross-Reference Integrity
-- [ ] All `[[LLM-XXXX]]` links point to existing files
-- [ ] All `[[concept-name]]` links point to existing concept pages
-- [ ] Orphan detection: pages with no inbound links from other wiki pages
-- [ ] index.md includes all source and concept pages
+### 1. Structure
 
-### 4. Log Health
-- [ ] If `log.md` exceeds 30 days of entries → archive older entries to `log-archive/YYYY-MM.md`
-- [ ] Log entries follow consistent format: `[YYYY-MM-DD HH:MM] action | file | who | description`
+- required directories exist: `raw/`, `sources/`, `concepts/`, `drafts/`,
+  `qa-reports/`, `_state/`, `templates/`
+- required root files exist: `SCHEMA.md`, `index.md`, `log.md`
+- source page filenames match `LLM-NNNN.md`
 
-### 5. Content Quality (lightweight)
-- [ ] Check for obviously stale claims (e.g., "latest" references older than 90 days)
-- [ ] Check for contradiction markers (`[CONTRADICTION]` or `⚠️` flags)
-- [ ] Suggest new concept pages for topics mentioned in 3+ sources but lacking a concept page
+### 2. Frontmatter
 
-## Execution
+- source pages include `id`, `title`, `status`, `created`, `updated`, `source`,
+  and `tags`
+- stable source pages live in `sources/`
+- draft source pages live in `drafts/`
+- concept pages include `id`, `title`, `created`, and `updated`
+- IDs are unique and sequential enough to audit
 
-### Via Cron (recommended)
-```
-schedule: "0 9 * * *"
-task: "Read wiki-lint Skill and execute full lint check. Report issues to chairman via message."
-```
+### 3. QA Coverage
 
-### Via Manual Command
-User says "lint the wiki" or "check wiki health" → load this Skill and execute.
+- every stable source has `qa-reports/LLM-NNNN.md`
+- every QA report has `overall` and `verdict`
+- no stable source has a failing or missing QA gate
+- contradiction reports exist after publish when required by the workflow
+
+### 4. Links and Index
+
+- `[[LLM-NNNN]]` links resolve to source pages
+- `[[concept-name]]` links resolve to concept pages
+- `index.md` lists all stable source pages and concept pages
+- orphan pages are reported, not automatically deleted
+
+### 5. Claim Hygiene
+
+- flag words such as "latest", "current", and "state of the art" when the page
+  is older than 90 days
+- report `[CONTRADICTION ...]` markers that need follow-up
+- suggest concept pages for topics appearing in three or more sources
+
+### 6. Log Health
+
+- log entries should follow:
+  `[YYYY-MM-DD HH:MM] action | target | agent | note`
+- report entries older than 30 days
+- in fix mode, archive old entries to `log-archive/YYYY-MM.md` without changing
+  archived history
 
 ## Output
 
-1. **Console output**: Summary of checks (pass/fail per category)
-2. **Alert to chairman**: Only if issues found — format:
-   ```
-   🔍 Wiki Lint Report
-   ✅ Format: PASS
-   ⚠️ QA Coverage: LLM-0042 missing QA report
-   ✅ Cross-refs: PASS
-   ✅ Log: PASS
-   🔴 Actions needed: [list]
-   ```
-3. **Log entry**: Append to log.md: `[YYYY-MM-DD HH:MM] lint | full-check | cron | [summary]`
+Return a concise report:
+
+```markdown
+# Wiki Lint Report
+- date: YYYY-MM-DD
+- mode: report-only|fix
+- structure: PASS|FAIL
+- frontmatter: PASS|FAIL
+- qa: PASS|FAIL
+- links: PASS|FAIL
+- claim hygiene: PASS|WARN|FAIL
+- log: PASS|WARN|FAIL
+
+## Findings
+- [P1] path: issue and suggested fix
+
+## Files changed
+- none
+```
+
+Use priorities:
+
+- `P0`: data corruption, missing stable-source QA, broken schema
+- `P1`: broken links, unsafe status, duplicate IDs
+- `P2`: stale claims, missing index rows, orphan pages
+- `P3`: style or cleanup
