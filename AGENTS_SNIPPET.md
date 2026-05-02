@@ -16,6 +16,10 @@ Optional rules to paste into a wiki vault's `AGENTS.md`.
 - Query writeback is read-only by default; ask before writing unless the user
   has pre-authorized automatic wiki growth.
 - Lint is report-only by default; ask before applying fixes.
+- Prefer `.open-llm-wiki/scripts/wiki_lint.py` and
+  `.open-llm-wiki/scripts/wiki_search.py` when they are available.
+- Generate writeback diffs with `.open-llm-wiki/scripts/wiki_writeback.py`
+  before applying them.
 - Log every write in `log.md` using:
   `[YYYY-MM-DD HH:MM] action | target | agent | note`
 ```

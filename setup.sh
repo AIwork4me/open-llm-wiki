@@ -24,29 +24,17 @@ need_command() {
   fi
 }
 
-copy_new_file() {
-  local src="$1"
-  local dst="$2"
-  if [ -e "$dst" ] && [ "$FORCE" != "1" ]; then
-    echo "Keeping existing file: $dst"
-    return 0
-  fi
-  cp "$src" "$dst"
-}
-
-write_new_file() {
-  local dst="$1"
-  if [ -e "$dst" ] && [ "$FORCE" != "1" ]; then
-    echo "Keeping existing file: $dst"
-    return 0
-  fi
-  cat > "$dst"
-}
-
 need_command git
-need_command cp
-need_command mkdir
 need_command mktemp
+
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+else
+  echo "Missing required command: python3 or python" >&2
+  exit 1
+fi
 
 TMPDIR="$(mktemp -d)"
 cleanup() {
@@ -60,60 +48,17 @@ echo "Skill directory: $SKILL_DIR"
 
 git clone --depth 1 "$REPO_URL" "$TMPDIR/open-llm-wiki" >/dev/null
 
-mkdir -p "$WIKI_DIR"/{raw,sources,concepts,drafts,qa-reports,templates,_state,log-archive}
-mkdir -p "$SKILL_DIR"
-
-copy_new_file "$TMPDIR/open-llm-wiki/SCHEMA.md" "$WIKI_DIR/SCHEMA.md"
-cp "$TMPDIR/open-llm-wiki/templates/"* "$WIKI_DIR/templates/"
-
-write_new_file "$WIKI_DIR/_state/id-counter.md" <<'EOF'
-# ID Counter
-next: 1
-EOF
-
-write_new_file "$WIKI_DIR/index.md" <<'EOF'
-# LLM Wiki Index
-
-## Sources
-| ID | Title | Tags |
-| --- | --- | --- |
-
-## Concepts
-| Concept | Key Question | Sources |
-| --- | --- | --- |
-EOF
-
-write_new_file "$WIKI_DIR/log.md" <<'EOF'
-# Wiki Log
-EOF
-
-write_new_file "$WIKI_DIR/README.md" <<'EOF'
-# My LLM Wiki
-
-Personal research wiki powered by open-llm-wiki.
-
-## Structure
-
-- `raw/`: original source files
-- `drafts/`: pre-QA source drafts
-- `sources/`: stable source pages
-- `concepts/`: evolving concept pages
-- `qa-reports/`: append-only QA and contradiction reports
-- `templates/`: page templates
-
-## First Use
-
-Drop a paper into `raw/`, then ask your agent:
-
-`Ingest this paper: raw/<paper>.pdf`
-EOF
-
-cp -R "$TMPDIR/open-llm-wiki/skills/"* "$SKILL_DIR/"
+"$PYTHON_BIN" "$TMPDIR/open-llm-wiki/scripts/wiki_init.py" "$WIKI_DIR" \
+  --repo-root "$TMPDIR/open-llm-wiki" \
+  --skill-dir "$SKILL_DIR" \
+  --install-skills \
+  $(if [ "$FORCE" = "1" ]; then printf '%s' "--force"; fi)
 
 echo ""
 echo "Done."
 echo "- Wiki created at: $WIKI_DIR"
 echo "- Skills installed to: $SKILL_DIR"
+echo "- Runtime scripts copied to: $WIKI_DIR/.open-llm-wiki/scripts"
 echo ""
 echo "Next:"
 echo "1. Inspect the installed skills if this is your first run."

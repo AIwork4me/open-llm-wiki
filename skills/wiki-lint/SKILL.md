@@ -12,6 +12,18 @@ metadata:
 Audit an open-llm-wiki vault for structural, traceability, and maintenance
 problems. Default to report-only.
 
+## Runtime Tool
+
+Use the deterministic linter whenever available:
+
+```bash
+python scripts/wiki_lint.py "<vault>" --fail-on p1
+```
+
+The script checks structure, frontmatter, QA gates, contradiction reports,
+links, index coverage, stale claims, and log format. Read its report before
+doing any manual inspection.
+
 ## Safety Boundary
 
 - Read-only by default.
@@ -96,3 +108,8 @@ Use priorities:
 - `P1`: broken links, unsafe status, duplicate IDs
 - `P2`: stale claims, missing index rows, orphan pages
 - `P3`: style or cleanup
+
+## Fix Mode
+
+If the user asks to fix issues, address only the reported findings. Re-run
+`wiki_lint.py` after edits and report remaining findings.

@@ -13,6 +13,7 @@ It contains:
 - one concept page
 - one QA report
 - one contradiction report
+- one vault-local schema
 - an index
 - an operation log
 
@@ -53,3 +54,10 @@ Run wiki lint on examples/minimal-vault.
 ```
 
 The expected result is a report-only health check with no required fixes.
+
+The runtime smoke test also verifies search, writeback proposal generation, and
+fresh vault initialization:
+
+```bash
+python scripts/wiki_eval.py
+```

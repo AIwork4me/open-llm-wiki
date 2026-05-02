@@ -27,6 +27,14 @@ Write this section first. Prefer tables over figures. Name baselines.
 | --- | --- | --- | --- |
 | ... | ... | ... | Table/Figure/Section ... |
 
+Evidence:
+
+- paper:
+- page:
+- section:
+- table:
+- raw extraction:
+
 ## Timeline Position
 
 Describe where this source fits relative to prior and later work.

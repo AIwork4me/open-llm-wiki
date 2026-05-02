@@ -1,8 +1,8 @@
 # open-llm-wiki
 
-**一个面向 Claude Code 的 Skill 套件，用来把研究论文变成可审计、可持续增长的 LLM Wiki。**
+**一个面向 Claude Code 的 Skill 套件和轻量 runtime，用来把研究论文变成可审计、可持续增长的 LLM Wiki。**
 
-open-llm-wiki 帮助 Agent 将论文转成 source page，把多个 source 连接成 concept page，并用独立 QA、矛盾检查和 append-only 日志保持知识库可信。
+open-llm-wiki 帮助 Agent 将论文转成 source page，把多个 source 连接成 concept page，并用独立 QA、矛盾检查、append-only 日志、确定性 lint/search 工具和可审阅 writeback diff 保持知识库可信。
 
 灵感来自 [Andrej Karpathy 的 LLM Wiki 构想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。
 
@@ -23,6 +23,20 @@ open-llm-wiki 帮助 Agent 将论文转成 source page，把多个 source 连接
 | `wiki-ingest` | 用户要求加入一篇论文 | 解析文本、草稿页、独立 QA、稳定 source page、概念更新、矛盾报告 |
 | `query-writeback` | 用户提出跨 source 的 wiki 问题 | 先给有引用的回答；必要时提出写回计划 |
 | `wiki-lint` | 用户或自动化要求健康检查 | 默认只报告；经授权后才执行维护写入 |
+
+## Runtime 层
+
+Skill 负责判断和协调；runtime 脚本负责可重复检查：
+
+| Script | 用途 |
+| --- | --- |
+| `scripts/wiki_init.py` | 初始化个人/团队 vault |
+| `scripts/wiki_lint.py` | 检查结构、QA、链接、index、log 和过时断言 |
+| `scripts/wiki_search.py` | 本地 markdown 搜索 |
+| `scripts/wiki_writeback.py` | 生成或应用可审阅 writeback diff |
+| `scripts/wiki_eval.py` | 对示例 vault 做 smoke test |
+
+初始化会把 runtime 复制到 `<vault>/.open-llm-wiki/scripts/`，让知识库离开本仓库后也能继续自检。
 
 ## 快速开始
 
@@ -67,6 +81,8 @@ uvx --from skills-ref agentskills validate skills/wiki-ingest
 uvx --from skills-ref agentskills validate skills/query-writeback
 uvx --from skills-ref agentskills validate skills/wiki-lint
 python scripts/check_quality.py
+python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+python scripts/wiki_eval.py
 bash -n setup.sh
 ```
 

@@ -12,6 +12,22 @@ metadata:
 Ingest one source document into an open-llm-wiki vault. Optimize for
 traceability, safe file changes, and independent verification rather than speed.
 
+## Runtime Tools
+
+Prefer deterministic runtime scripts when they are available in either the repo
+or the vault:
+
+- `<repo>/scripts/wiki_lint.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_lint.py`
+- `<repo>/scripts/wiki_search.py`
+- `<vault>/.open-llm-wiki/scripts/wiki_search.py`
+
+Run lint before and after ingest:
+
+```bash
+python scripts/wiki_lint.py "<vault>" --fail-on p1
+```
+
 ## Safety Boundary
 
 - Run only after the user explicitly asks to ingest a source.
@@ -72,6 +88,10 @@ Create `drafts/LLM-NNNN.md` with `status: draft`. Required sections:
 Write the `key data` section first. Every numeric claim must include a source
 location or table reference when available. Prefer tables over figures; if a
 figure is the only source, mark the claim as figure-derived.
+
+Add an `Evidence` block with page, table, section, line, or extraction-offset
+anchors for the most important claims. If exact anchors are unavailable, state
+what anchor is missing so future lint/review can improve it.
 
 ### 4. Self-Check
 
@@ -160,7 +180,9 @@ The ingest is complete only when:
 
 - the source page is stable in `sources/`
 - QA report exists and passes
+- evidence anchors exist for key claims
 - relevant concepts and `index.md` are updated
 - contradiction report exists
 - `log.md` records the operation
+- `wiki_lint.py <vault> --fail-on p1` passes when the runtime is available
 - the final response lists changed files and any residual uncertainty

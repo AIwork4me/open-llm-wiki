@@ -32,3 +32,10 @@ cite both sides, and let the concept page show how understanding changed.
 
 The repository should be easy to validate with official skill checks, a local
 quality script, and CI. A workflow that cannot be checked will drift.
+
+### Runtime Beats Prompting Alone
+
+Long-lived knowledge systems need deterministic tools for repetitive work:
+initialization, lint, search, and diff generation. The LLM should spend its
+attention on judgment and synthesis, while scripts enforce the boring invariants
+that keep the wiki healthy after hundreds of edits.

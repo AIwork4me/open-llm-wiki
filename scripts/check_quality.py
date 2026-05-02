@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -98,6 +99,12 @@ def check_docs() -> None:
         "SHOWCASE.md",
         "PHILOSOPHY.md",
         "setup.sh",
+        "scripts/wiki_common.py",
+        "scripts/wiki_init.py",
+        "scripts/wiki_lint.py",
+        "scripts/wiki_search.py",
+        "scripts/wiki_writeback.py",
+        "scripts/wiki_eval.py",
     ]
     for item in required:
         if not (ROOT / item).exists():
@@ -126,11 +133,11 @@ def check_minimal_vault() -> None:
         "_state/id-counter.md",
         "sources/LLM-0001.md",
         "concepts/attention-mechanisms.md",
+        "SCHEMA.md",
         "qa-reports/LLM-0001.md",
         "qa-reports/LLM-0001-contradiction.md",
     ]
-    # SCHEMA.md is copied by setup, not stored inside the example vault.
-    for item in required[1:]:
+    for item in required:
         if not (vault / item).exists():
             fail(f"minimal vault missing {item}")
 
@@ -158,11 +165,25 @@ def check_setup_script() -> None:
         fail("setup.sh must clean temp directory with trap")
 
 
+def run_runtime_checks() -> None:
+    commands = [
+        [sys.executable, "scripts/wiki_lint.py", "examples/minimal-vault", "--fail-on", "p1"],
+        [sys.executable, "scripts/wiki_search.py", "examples/minimal-vault", "attention transformer", "--limit", "2"],
+        [sys.executable, "scripts/wiki_eval.py"],
+    ]
+    for command in commands:
+        result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if result.returncode != 0:
+            print(result.stdout)
+            fail(f"runtime check failed: {' '.join(command)}")
+
+
 def main() -> None:
     check_skills()
     check_docs()
     check_minimal_vault()
     check_setup_script()
+    run_runtime_checks()
     print("quality checks passed")
 
 

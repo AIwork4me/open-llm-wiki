@@ -12,6 +12,21 @@ metadata:
 Use the wiki to answer synthesis questions, then preserve high-value synthesis
 only when file changes are authorized.
 
+## Runtime Tools
+
+Use deterministic scripts when available:
+
+- `wiki_search.py` to find relevant source and concept pages
+- `wiki_writeback.py` to produce a reviewable diff before changing files
+- `wiki_lint.py` after approved writeback
+
+Example:
+
+```bash
+python scripts/wiki_search.py "<vault>" "<query>" --limit 8
+python scripts/wiki_writeback.py "<vault>" --target concepts/<page>.md --query "<query>" --body-file <draft.md>
+```
+
 ## Trigger Boundary
 
 Use this skill for questions that require cross-source synthesis:
@@ -107,6 +122,9 @@ Mark writeback-derived sections with:
 
 `query-derived: YYYY-MM-DD`
 
+If `wiki_writeback.py` is available, use it to produce the diff first. Apply
+only after approval or pre-authorization.
+
 ## Completion Criteria
 
 Finish with:
@@ -115,4 +133,5 @@ Finish with:
 - citations used
 - whether writeback was skipped, proposed, or completed
 - changed files if writeback happened
+- lint result after writeback when runtime tools are available
 - remaining gaps that require future ingest

@@ -1,11 +1,12 @@
 # open-llm-wiki
 
-**A Claude Code skill bundle for turning research papers into an auditable,
-compounding LLM wiki.**
+**A Claude Code skill bundle and lightweight runtime for turning research
+papers into an auditable, compounding LLM wiki.**
 
 open-llm-wiki helps an agent convert papers into source pages, connect those
 pages into concept notes, and keep the knowledge base honest with independent
-QA, contradiction checks, and append-only logs.
+QA, contradiction checks, append-only logs, deterministic lint/search tools, and
+reviewable writeback diffs.
 
 Inspired by [Andrej Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
@@ -30,9 +31,25 @@ independent QA pass and an audit record.
 | --- | --- | --- |
 | `wiki-ingest` | User asks to add one paper | parsed text, draft source page, independent QA, stable source page, concept updates, contradiction report |
 | `query-writeback` | User asks a cross-source wiki question | cited answer first; optional approved writeback to concept pages |
-| `wiki-lint` | User or automation asks for a health check | report-only audit by default; optional approved maintenance fixes |
+| `wiki-lint` | User or automation asks for a health check | deterministic report-first audit; optional approved maintenance fixes |
 
 ![Pipeline](assets/pipeline.svg)
+
+## Runtime Layer
+
+The skills coordinate judgment. The runtime scripts handle repeatable checks:
+
+| Script | Purpose |
+| --- | --- |
+| `scripts/wiki_init.py` | initialize a portable personal/team vault |
+| `scripts/wiki_lint.py` | verify structure, QA gates, links, index, logs, and stale claims |
+| `scripts/wiki_search.py` | local markdown search across source and concept pages |
+| `scripts/wiki_writeback.py` | generate or apply reviewable query-writeback diffs |
+| `scripts/wiki_eval.py` | smoke-test the runtime against the example vault |
+
+`setup.sh` and `wiki_init.py` copy the runtime into
+`<vault>/.open-llm-wiki/scripts/` so a wiki can keep validating itself after it
+leaves this repository.
 
 ## Quick Start
 
@@ -103,6 +120,8 @@ uvx --from skills-ref agentskills validate skills/wiki-ingest
 uvx --from skills-ref agentskills validate skills/query-writeback
 uvx --from skills-ref agentskills validate skills/wiki-lint
 python scripts/check_quality.py
+python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+python scripts/wiki_eval.py
 bash -n setup.sh
 ```
 
@@ -114,7 +133,8 @@ GitHub Actions runs the same checks on push and pull request.
 2. Independent QA is a quality gate, not a nice-to-have.
 3. Hard numbers need traceable sources and explicit baselines.
 4. Contradictions are marked, not silently overwritten.
-5. File writes are scoped, logged, and reviewable.
+5. Query writeback should be proposed as a diff before it becomes knowledge.
+6. File writes are scoped, logged, and reviewable.
 
 ## License
 

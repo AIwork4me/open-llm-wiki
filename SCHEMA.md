@@ -7,6 +7,7 @@ Agents should read it before editing a wiki vault.
 
 ```text
 my-llm-wiki/
+|-- .open-llm-wiki/ # runtime scripts copied by setup/init
 |-- raw/             # original source files and parsed text
 |-- drafts/          # source pages before QA approval
 |-- sources/         # stable source pages
@@ -52,6 +53,8 @@ Rules:
 - `updated` is the last wiki edit date.
 - every source page needs hard numbers or an explicit note that the source has
   no quantitative claims.
+- important claims should include evidence anchors: page, section, table, line,
+  or extraction offset.
 
 ## Concept Frontmatter
 
@@ -115,6 +118,19 @@ QA report format:
 
 QA reports are append-only. Do not rewrite historical reports.
 
+## Evidence Anchors
+
+Every durable factual claim should be traceable. Use the best available anchor:
+
+- `page: 7`
+- `section: 3.2`
+- `table: 2`
+- `raw extraction: raw/paper_fulltext.txt#L120-L145`
+- `doi:` or `arxiv:` when the claim is source identity
+
+If exact anchors are unavailable, write the nearest human-readable anchor and
+mark what needs improvement.
+
 ## Contradictions
 
 When new evidence conflicts with an existing concept claim:
@@ -137,6 +153,15 @@ Writeback is appropriate when the answer:
 
 Answering is read-only by default. Writeback requires approval unless the user
 has pre-authorized automatic wiki growth.
+
+Preferred writeback flow:
+
+1. answer with citations
+2. generate a proposed diff
+3. get approval or use explicit pre-authorization
+4. apply the diff
+5. run lint
+6. append `log.md`
 
 ## Log Format
 
@@ -166,3 +191,13 @@ Allowed actions include:
 - never delete pages during ingest or lint without explicit user approval
 - prefer targeted edits over whole-page rewrites
 - list changed files in the final response
+
+## Runtime Commands
+
+The vault may contain runtime scripts at `.open-llm-wiki/scripts/`:
+
+```bash
+python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
+python .open-llm-wiki/scripts/wiki_search.py . "query terms"
+python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."
+```

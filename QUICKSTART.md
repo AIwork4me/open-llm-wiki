@@ -31,6 +31,7 @@ The script:
 - copies `SCHEMA.md` and templates
 - initializes `index.md`, `log.md`, and `_state/id-counter.md`
 - installs the three skills into `~/.claude/skills/`
+- copies runtime scripts into `my-llm-wiki/.open-llm-wiki/scripts/`
 
 Override the skill directory when needed:
 
@@ -114,6 +115,12 @@ valuable enough to preserve, it proposes a writeback plan. File changes happen
 only after approval unless you have explicitly pre-authorized automatic
 writeback.
 
+You can also search locally before asking for synthesis:
+
+```bash
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_search.py my-llm-wiki "attention transformer"
+```
+
 ## Run a Health Check
 
 ```text
@@ -122,6 +129,26 @@ Run wiki lint on my-llm-wiki.
 
 Lint is report-only by default. Ask for fix mode only when you want maintenance
 writes such as index repair or log archival.
+
+Run the deterministic linter directly:
+
+```bash
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_lint.py my-llm-wiki --fail-on p1
+```
+
+## Propose a Writeback Diff
+
+For long-lived team knowledge bases, preserve useful answers through reviewable
+diffs:
+
+```bash
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_writeback.py my-llm-wiki \
+  --target concepts/attention-mechanisms.md \
+  --query "Why did attention become central?" \
+  --body "Attention created direct token-to-token interaction paths. [[LLM-0001]]"
+```
+
+Review the diff before applying. Add `--apply` only after approval.
 
 ## Validate the Repository
 
@@ -132,5 +159,7 @@ uvx --from skills-ref agentskills validate skills/wiki-ingest
 uvx --from skills-ref agentskills validate skills/query-writeback
 uvx --from skills-ref agentskills validate skills/wiki-lint
 python scripts/check_quality.py
+python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+python scripts/wiki_eval.py
 bash -n setup.sh
 ```

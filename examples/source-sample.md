@@ -32,6 +32,12 @@ information without recurrence.
 | Attention heads, base | 8 | not applicable | architecture section |
 | Layers, base | 6 encoder + 6 decoder | not applicable | architecture section |
 
+Evidence:
+
+- paper: Vaswani et al., "Attention Is All You Need"
+- sections: model architecture and results table
+- recommended production anchor: page, table, line, or extraction offset
+
 ## Timeline Position
 
 ```text

@@ -19,6 +19,7 @@ Write synthesis across sources. Cite every important claim.
 
 - Insight with citation. [[LLM-XXXX]]
 - Inference clearly labeled as inference. [[LLM-YYYY]]
+- Claim with evidence anchor inherited from the source page. [[LLM-ZZZZ]]
 
 ## Timeline
 

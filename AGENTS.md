@@ -19,6 +19,8 @@ product is the behavior of the three skills in `skills/`:
 - Do not add unsupported frontmatter fields. Use `metadata` for versioning.
 - Basic use must not require API keys. Cloud OCR is optional and must be
   disclosed because document content may leave the local machine.
+- Prefer runtime scripts for repeatable operations: `wiki_init.py`,
+  `wiki_lint.py`, `wiki_search.py`, `wiki_writeback.py`, and `wiki_eval.py`.
 - `raw/` files are immutable evidence.
 - QA reports and contradiction reports are append-only.
 - Query writeback and lint are read-only by default.
@@ -53,6 +55,8 @@ uvx --from skills-ref agentskills validate skills/wiki-ingest
 uvx --from skills-ref agentskills validate skills/query-writeback
 uvx --from skills-ref agentskills validate skills/wiki-lint
 python scripts/check_quality.py
+python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+python scripts/wiki_eval.py
 bash -n setup.sh
 ```
 
