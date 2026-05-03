@@ -184,6 +184,35 @@ def check_setup_script() -> None:
         fail("setup.sh must clean temp directory with trap")
 
 
+def check_ingest_corpus_help() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/wiki_ingest_corpus.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        fail("wiki_ingest_corpus.py --help failed")
+    required = [
+        "raw/*_markdown/combined.md",
+        "draft source pages",
+        "QA report generation",
+        "sources/LLM-NNNN.md",
+        "contradiction",
+        "concept pages",
+        "index.md",
+        "log.md",
+        "Resume behavior:",
+        "--resume",
+    ]
+    missing = [item for item in required if item not in result.stdout]
+    if missing:
+        print(result.stdout)
+        fail(f"wiki_ingest_corpus.py --help missing expected guidance: {missing}")
+
+
 def run_runtime_checks() -> None:
     commands = [
         [sys.executable, "scripts/wiki_lint.py", "examples/minimal-vault", "--fail-on", "p1"],
@@ -239,6 +268,7 @@ def main() -> None:
     check_docs()
     check_minimal_vault()
     check_setup_script()
+    check_ingest_corpus_help()
     run_runtime_checks()
     check_safety_boundaries()
     print("quality checks passed")

@@ -346,7 +346,20 @@ This concept helps connect individual source pages into reusable wiki knowledge.
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Ingest raw/*_markdown/combined.md files into source pages.")
+    parser = argparse.ArgumentParser(
+        description="Ingest raw/*_markdown/combined.md files into source pages.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Workflow:\n"
+            "  Reads each raw/*_markdown/combined.md file, creates draft source pages, runs deterministic\n"
+            "  QA report generation, publishes passing pages to sources/LLM-NNNN.md, writes contradiction\n"
+            "  reports, updates concept pages, index.md, log.md, and _state/id-counter.md.\n"
+            "\n"
+            "Resume behavior:\n"
+            "  By default, existing source/concept/QA pages are protected. Use --resume to skip an already\n"
+            "  ingested vault, or --force-empty only for a controlled regenerated corpus vault.\n"
+        ),
+    )
     parser.add_argument("vault", type=Path)
     parser.add_argument("--today", default=datetime.now().strftime("%Y-%m-%d"))
     parser.add_argument("--resume", action="store_true", help="Skip existing source IDs instead of refusing existing output.")
