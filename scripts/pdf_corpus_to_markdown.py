@@ -88,7 +88,8 @@ def main() -> int:
         raise SystemExit(f"no PDFs matched {args.pattern!r} in {input_dir}")
 
     failures = 0
-    for pdf in pdfs:
+    total = len(pdfs)
+    for index, pdf in enumerate(pdfs, 1):
         output_dir = output_root / f"{pdf.stem}_markdown"
         combined = output_dir / args.combined_name
         if combined.exists() and not args.force:
@@ -101,6 +102,9 @@ def main() -> int:
             print(f"PLAN {pdf} -> {output_dir}")
             continue
         try:
+            message = f"converting {index}/{total}"
+            print(f"START {pdf.name}: {message}; output={output_dir}", flush=True)
+            write_log_row(log_path, status_row("START", pdf, output_dir, message))
             convert_one(args, pdf, output_dir)
             write_log_row(log_path, status_row("OK", pdf, output_dir, "converted"))
         except SystemExit as exc:  # pragma: no cover - exercised by real API failures.
