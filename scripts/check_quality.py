@@ -234,6 +234,74 @@ def check_safety_boundaries() -> None:
             fail("normalization boundary failure did not explain the vault constraint")
 
 
+def check_corpus_ingest_resume_continues() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("resume test vault initialization failed")
+        for name in ["DeepSeek_A_2401.00001", "DeepSeek_B_2402.00002"]:
+            markdown_dir = vault / "raw" / f"{name}_markdown"
+            markdown_dir.mkdir(parents=True)
+            (vault / "raw" / f"{name}.pdf").write_bytes(b"%PDF-1.4 fake")
+            (markdown_dir / "combined.md").write_text(
+                f"# {name}\n\n"
+                "Abstract\n"
+                f"{name} uses 2B parameters and 1.5B training tokens for code and math benchmarks. "
+                "HumanEval score is 75% against a 60% baseline and MATH score is 62% across 500 samples.\n",
+                encoding="utf-8",
+            )
+        first = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_ingest_corpus.py",
+                str(vault),
+                "--today",
+                "2026-05-03",
+                "--force-empty",
+                "--limit",
+                "1",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if first.returncode != 0:
+            print(first.stdout)
+            fail("initial partial corpus ingest failed")
+        resumed = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(vault), "--today", "2026-05-03", "--resume"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if resumed.returncode != 0:
+            print(resumed.stdout)
+            fail("resume corpus ingest failed")
+        if not (vault / "sources" / "LLM-0002.md").exists():
+            print(resumed.stdout)
+            fail("resume corpus ingest did not continue to LLM-0002")
+        lint = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if lint.returncode != 0:
+            print(lint.stdout)
+            fail("resumed corpus vault failed p1 lint")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -241,6 +309,7 @@ def main() -> None:
     check_setup_script()
     run_runtime_checks()
     check_safety_boundaries()
+    check_corpus_ingest_resume_continues()
     print("quality checks passed")
 
 
