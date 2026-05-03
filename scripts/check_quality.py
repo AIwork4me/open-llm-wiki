@@ -126,6 +126,7 @@ def check_docs() -> None:
         "scripts/wiki_search.py",
         "scripts/wiki_writeback.py",
         "scripts/wiki_eval.py",
+        "scripts/generate_test_corpus.py",
     ]
     for item in required:
         if not (ROOT / item).exists():
