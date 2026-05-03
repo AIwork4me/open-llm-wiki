@@ -8,19 +8,35 @@
 [![QA Checklist](https://img.shields.io/badge/QA%20Checklist-ready-brightgreen)](Checklist.md)
 [![Last Commit](https://img.shields.io/github/last-commit/AIwork4me/open-llm-wiki)](https://github.com/AIwork4me/open-llm-wiki/commits/main)
 
-[Chinese README](README.zh.md)
+[Chinese README](README.zh.md) | [Quick start](QUICKSTART.md) | [Evaluation checklist](Checklist.md) | [Schema](SCHEMA.md) | [Showcase](SHOWCASE.md)
 
-**A Claude Code skill bundle and lightweight runtime for turning research
-papers into an auditable, compounding LLM wiki.**
+**Turn research papers into a self-growing, auditable LLM wiki.**
 
-open-llm-wiki helps an agent convert papers into source pages, extract durable
-claims, connect those claims into concept notes, and keep the knowledge base
-honest with independent QA, contradiction checks, append-only logs,
-deterministic semantic-growth tools, and reviewable writeback diffs.
+open-llm-wiki is a Claude Code skill bundle and project-local Python runtime
+for converting PDFs and parsed Markdown into durable source pages, normalized
+claim graphs, concept pages, review queues, and reproducible QA reports.
+
+It is built for people who want a research knowledge base that gets better over
+time without losing scientific caution.
+
+| You get | Why it matters |
+| --- | --- |
+| Evidence-first source pages | Every durable note links back to a paper, parsed text, or evidence anchor. |
+| Semantic self-growth | Claims feed concept pages through QA, contradiction checks, and metric normalization. |
+| Review gates | Ambiguous metrics are queued for second-pass LLM or human scientific review before long-term synthesis. |
+| Portable runtime | `uv` manages a local `.venv`; vaults carry `.open-llm-wiki/scripts/` for repeatable checks. |
+
+Try the runtime in 60 seconds:
+
+```bash
+git clone https://github.com/AIwork4me/open-llm-wiki.git
+cd open-llm-wiki
+uv sync --dev --locked
+uv run python scripts/wiki_eval.py
+bash setup.sh my-llm-wiki
+```
 
 Inspired by [Andrej Karpathy's LLM Wiki concept](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
-
-[Quick start](QUICKSTART.md) | [Evaluation checklist](Checklist.md) | [Schema](SCHEMA.md) | [Examples](EXAMPLES.md) | [Showcase](SHOWCASE.md)
 
 ---
 

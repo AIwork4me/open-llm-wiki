@@ -8,15 +8,34 @@
 [![QA Checklist](https://img.shields.io/badge/QA%20Checklist-ready-brightgreen)](Checklist.md)
 [![Last Commit](https://img.shields.io/github/last-commit/AIwork4me/open-llm-wiki)](https://github.com/AIwork4me/open-llm-wiki/commits/main)
 
-[English README](README.md)
+[English README](README.md) | [快速开始](QUICKSTART.md) | [测评清单](Checklist.md) | [Schema](SCHEMA.md) | [展示](SHOWCASE.md)
 
-**一个面向 Claude Code 的 Skill 套件和轻量 runtime，用来把研究论文变成可审计、可持续增长的 LLM Wiki。**
+**把研究论文变成可审计、可持续自增长的 LLM Wiki。**
 
-open-llm-wiki 帮助 Agent 将论文转成 source page，抽取结构化 claim，把多个 source 连接成 concept page，并用独立 QA、矛盾检查、append-only 日志、确定性语义增长工具和可审阅 writeback diff 保持知识库可信。
+open-llm-wiki 是一个面向 Claude Code 的 Skill 套件和项目本地 Python
+runtime，可将 PDF 和解析后的 Markdown 转成稳定 source pages、normalized
+claim graph、concept pages、科学审稿队列和可复现 QA 报告。
+
+它适合想让个人/团队研究知识库长期增长，同时保留科学审慎边界的人。
+
+| 你会得到 | 为什么重要 |
+| --- | --- |
+| 证据优先的 source pages | 每条长期笔记都能回到论文、解析文本或 evidence anchor。 |
+| 语义自增长 | claims 经过 QA、矛盾检查和 metric 归一化后再进入 concept pages。 |
+| 审稿门禁 | 模糊 metric 会进入二级 LLM/人工科学审稿队列，不会直接写入长期 synthesis。 |
+| 可迁移 runtime | `uv` 管理本地 `.venv`；vault 自带 `.open-llm-wiki/scripts/` 继续自检。 |
+
+60 秒试跑 runtime：
+
+```bash
+git clone https://github.com/AIwork4me/open-llm-wiki.git
+cd open-llm-wiki
+uv sync --dev --locked
+uv run python scripts/wiki_eval.py
+bash setup.sh my-llm-wiki
+```
 
 灵感来自 [Andrej Karpathy 的 LLM Wiki 构想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。
-
-[快速开始](QUICKSTART.md) | [测评清单](Checklist.md) | [Schema](SCHEMA.md) | [示例](EXAMPLES.md) | [展示](SHOWCASE.md)
 
 ---
 
