@@ -147,7 +147,7 @@ def main() -> int:
         return 0
     if args.command == "run-due":
         due_now = datetime.now().isoformat()
-        for row in sorted(rows, key=lambda item: (item.get("priority", 50), item.get("due_at", ""))):
+        for row in sorted(rows, key=lambda item: (item.get("due_at", ""), item.get("priority", 50))):
             if row.get("status") != "pending" or str(row.get("due_at", "")) > due_now:
                 continue
             print(f"run {row['task_id']}: {row['action']}")

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -66,6 +67,29 @@ def main() -> int:
         )
         run([sys.executable, "scripts/wiki_queue.py", str(growth_vault), "list"])
         run([sys.executable, "scripts/wiki_lint.py", str(growth_vault), "--fail-on", "p1"])
+
+        queue_vault = Path(tmp) / "queue-vault"
+        shutil.copytree(vault, queue_vault)
+        run([sys.executable, "scripts/wiki_queue.py", str(queue_vault), "plan", "--cadence", "now"])
+        queue_path = queue_vault / "_state" / "growth-queue.jsonl"
+        rows = [json.loads(line) for line in queue_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        due_at = {
+            "discover": "2000-01-01T00:00:00",
+            "grow": "2000-01-01T00:05:00",
+            "science-review": "2000-01-01T00:10:00",
+            "concept-revision": "2000-01-01T00:15:00",
+            "lint": "2000-01-01T00:20:00",
+        }
+        for row in rows:
+            row["due_at"] = due_at[str(row["action"])]
+        queue_path.write_text(
+            "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        dry_run = run([sys.executable, "scripts/wiki_queue.py", str(queue_vault), "run-due", "--dry-run"])
+        actions = [line.split(": ", 1)[1] for line in dry_run.splitlines() if line.startswith("run ")]
+        if actions != ["discover", "grow", "science-review", "lint"]:
+            raise SystemExit(f"queue dry-run order is not due-time order: {actions}")
 
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
