@@ -234,6 +234,37 @@ def check_safety_boundaries() -> None:
             fail("normalization boundary failure did not explain the vault constraint")
 
 
+def check_pdf_corpus_report_parser_warnings() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        raw_dir = Path(tmp) / "raw"
+        output_dir = raw_dir / "paper_markdown"
+        output_dir.mkdir(parents=True)
+        (raw_dir / "paper.pdf").write_bytes(b"%PDF-1.4 fake")
+        (output_dir / "combined.md").write_text("converted markdown\n", encoding="utf-8")
+        (output_dir / "manifest.json").write_text(
+            '{"attempts": 1, "warnings": ["parser warning: table dropped"]}\n',
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pdf_corpus_report.py",
+                str(raw_dir),
+                "--fail-on-parser-warnings",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            print(result.stdout)
+            fail("corpus report accepted parser warnings")
+        if "parser_warnings: 1" not in result.stdout:
+            print(result.stdout)
+            fail("corpus report did not identify parser warnings")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -241,6 +272,7 @@ def main() -> None:
     check_setup_script()
     run_runtime_checks()
     check_safety_boundaries()
+    check_pdf_corpus_report_parser_warnings()
     print("quality checks passed")
 
 

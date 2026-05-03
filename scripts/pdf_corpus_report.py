@@ -31,6 +31,19 @@ def parse_attempts(manifests: list[Path]) -> list[int]:
     return attempts
 
 
+def parser_warnings(manifests: list[Path]) -> list[tuple[Path, str]]:
+    warnings: list[tuple[Path, str]] = []
+    for path in manifests:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = data.get("warnings", [])
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                warnings.append((path, item.strip()))
+    return warnings
+
+
 def suspicious_files(combined_files: list[Path]) -> list[tuple[Path, int]]:
     hits: list[tuple[Path, int]] = []
     for path in combined_files:
@@ -59,6 +72,7 @@ def main() -> int:
     parser.add_argument("--expect-count", type=int)
     parser.add_argument("--semantic-term", action="append", default=[])
     parser.add_argument("--fail-on-missing", action="store_true")
+    parser.add_argument("--fail-on-parser-warnings", action="store_true")
     parser.add_argument("--fail-on-suspicious", action="store_true")
     args = parser.parse_args()
 
@@ -68,6 +82,7 @@ def main() -> int:
 
     pdfs, combined, manifests = collect_outputs(raw_dir, args.combined_name)
     attempts = parse_attempts(manifests)
+    warnings = parser_warnings(manifests)
     suspicious = suspicious_files(combined)
     semantic = semantic_matches(combined, args.semantic_term)
     total_bytes = sum(path.stat().st_size for path in combined)
@@ -88,6 +103,9 @@ def main() -> int:
     if args.semantic_term:
         print(f"semantic_matches: {semantic}")
         print(f"semantic_terms: {', '.join(args.semantic_term)}")
+    print(f"parser_warnings: {len(warnings)}")
+    for path, warning in warnings:
+        print(f"parser_warning: {path}: {warning}")
     print(f"suspicious_files: {len(suspicious)}")
     for path, count in suspicious:
         print(f"suspicious: {path} tokens={count}")
@@ -102,6 +120,8 @@ def main() -> int:
             failures.append(f"expected {args.expect_count} manifests, found {len(manifests)}")
     if args.fail_on_missing and (len(combined) != len(pdfs) or len(manifests) != len(pdfs)):
         failures.append("not every PDF has combined Markdown and a manifest")
+    if args.fail_on_parser_warnings and warnings:
+        failures.append("parser warnings found")
     if args.fail_on_suspicious and suspicious:
         failures.append("suspicious text markers found")
     if args.semantic_term and semantic != len(combined):
