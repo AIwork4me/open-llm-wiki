@@ -30,6 +30,13 @@ def clean_key(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def descriptive_object_key(text: str) -> str:
+    key = clean_key(text)
+    if re.fullmatch(r"[0-9% ]+", key):
+        return ""
+    return key
+
+
 def baseline_key(text: str) -> str:
     lowered = clean_key(text)
     if not lowered or lowered in {"as stated in source", "not applicable", "none"}:
@@ -96,7 +103,7 @@ def normalize_claim(claim: dict[str, object]) -> dict[str, object]:
     object_text = str(claim.get("object", ""))
     family = metric_family(predicate, unit, object_text)
     norm_unit = normalize_unit(unit, family)
-    claim["metric_key"] = clean_key(predicate) or clean_key(object_text) or "reported numeric claim"
+    claim["metric_key"] = clean_key(predicate) or descriptive_object_key(object_text) or "reported numeric claim"
     claim["unit_family"] = family
     claim["normalized_unit"] = norm_unit
     claim["normalized_value"] = normalized_value(claim.get("value"), unit, family)
