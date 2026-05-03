@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -232,6 +233,33 @@ def check_safety_boundaries() -> None:
         if "must stay inside the vault" not in result.stdout:
             print(result.stdout)
             fail("normalization boundary failure did not explain the vault constraint")
+
+        claims_vault = Path(tmp) / "claims-vault"
+        shutil.copytree(vault, claims_vault)
+        raw_target = claims_vault / "raw" / "evil.md"
+        raw_target.write_text("# Raw evidence placeholder\n", encoding="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_claims.py",
+                str(claims_vault),
+                "--output",
+                str(raw_target),
+                "--report",
+                str(claims_vault / "claims" / "claim-report.md"),
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            fail("claim extraction accepted an output path outside claims/")
+        if "under claims/" not in result.stdout:
+            print(result.stdout)
+            fail("claim output boundary failure did not explain the claims/ constraint")
+        if "claim_id" in raw_target.read_text(encoding="utf-8"):
+            fail("claim extraction modified raw evidence through an unsafe output path")
 
 
 def main() -> None:
