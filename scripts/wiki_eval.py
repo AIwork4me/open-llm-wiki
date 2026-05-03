@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,40 @@ def main() -> int:
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])
+
+        qa_vault = Path(tmp) / "qa-vault"
+        shutil.copytree(vault, qa_vault)
+        claim = {
+            "claim_id": "claim-missing-anchor",
+            "source_id": "LLM-0001",
+            "claim_type": "metric",
+            "predicate": "WMT 2014 EN-DE BLEU, base",
+            "object": "27.3",
+            "value": 27.3,
+            "unit": "",
+            "baseline": "prior systems",
+            "normalized_value": 27.3,
+            "evidence": "sources/LLM-0001.md#Missing Anchor",
+            "concepts": ["attention-mechanisms"],
+        }
+        (qa_vault / "claims" / "claims.jsonl").write_text(
+            json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        qa_output = run(
+            [
+                sys.executable,
+                "scripts/wiki_semantic_qa.py",
+                str(qa_vault),
+                "--format",
+                "json",
+                "--fail-on",
+                "none",
+            ]
+        )
+        issues = json.loads(qa_output)["issues"]
+        if not any("heading anchor does not exist" in item["message"] for item in issues):
+            raise SystemExit("semantic QA eval did not flag a missing heading anchor")
 
     print("runtime eval passed")
     return 0
