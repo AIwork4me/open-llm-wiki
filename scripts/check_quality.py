@@ -365,6 +365,52 @@ def run_runtime_checks() -> None:
             print(result.stdout)
             fail(f"runtime check failed: {' '.join(command)}")
 
+    semantic_help = subprocess.run(
+        [sys.executable, "scripts/wiki_semantic_qa.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "p1 fails on P0/P1" not in semantic_help.stdout:
+        fail("semantic QA help must document fail-on severity thresholds")
+
+    science_help = subprocess.run(
+        [sys.executable, "scripts/wiki_science_review.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "Write qa-reports/science-review" not in science_help.stdout:
+        fail("science review help must document report mode")
+
+    contradiction_help = subprocess.run(
+        [sys.executable, "scripts/wiki_contradictions.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "Relative numeric spread threshold" not in contradiction_help.stdout:
+        fail("contradiction help must document candidate detection behavior")
+    if "Write qa-reports/claim-contradictions" not in contradiction_help.stdout:
+        fail("contradiction help must document report mode")
+    if "Exit non-zero when numeric contradiction candidates" not in contradiction_help.stdout:
+        fail("contradiction help must document fail-on-candidate behavior")
+
+    concept_help = subprocess.run(
+        [sys.executable, "scripts/wiki_concept_revision.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "preview mode" not in concept_help.stdout or "without writing" not in concept_help.stdout:
+        fail("concept revision help must document preview mode")
+    if "Write updated concept pages and log entries" not in concept_help.stdout:
+        fail("concept revision help must document apply mode")
+
 
 def check_pdf_to_markdown_http_errors() -> None:
     class FailingHandler(BaseHTTPRequestHandler):

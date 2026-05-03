@@ -32,6 +32,15 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def replace_with_symlink(path: Path, target: Path) -> bool:
+    path.unlink()
+    try:
+        path.symlink_to(target)
+    except (NotImplementedError, OSError):
+        return False
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run runtime smoke evaluations.")
     parser.add_argument("--vault", type=Path, default=ROOT / "examples" / "minimal-vault")
@@ -88,9 +97,43 @@ def main() -> int:
         run([sys.executable, "scripts/wiki_queue.py", str(growth_vault), "list"])
         run([sys.executable, "scripts/wiki_lint.py", str(growth_vault), "--fail-on", "p1"])
 
+        queue_vault = Path(tmp) / "queue-vault"
+        shutil.copytree(vault, queue_vault)
+        run([sys.executable, "scripts/wiki_queue.py", str(queue_vault), "plan", "--cadence", "now"])
+        queue_path = queue_vault / "_state" / "growth-queue.jsonl"
+        rows = load_jsonl(queue_path)
+        due_at = {
+            "discover": "2000-01-01T00:00:00",
+            "grow": "2000-01-01T00:05:00",
+            "science-review": "2000-01-01T00:10:00",
+            "concept-revision": "2000-01-01T00:15:00",
+            "lint": "2000-01-01T00:20:00",
+        }
+        for row in rows:
+            row["due_at"] = due_at[str(row["action"])]
+        write_jsonl(queue_path, rows)
+        dry_run = run([sys.executable, "scripts/wiki_queue.py", str(queue_vault), "run-due", "--dry-run"])
+        actions = [line.split(": ", 1)[1] for line in dry_run.splitlines() if line.startswith("run ")]
+        if actions != ["discover", "grow", "science-review", "lint"]:
+            raise SystemExit(f"queue dry-run order is not due-time order: {actions}")
+
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])
+
+        missing_review_queue_vault = Path(tmp) / "missing-review-queue-vault"
+        shutil.copytree(vault, missing_review_queue_vault)
+        (missing_review_queue_vault / "_state" / "science-review-queue.jsonl").unlink()
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(missing_review_queue_vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if lint_result.returncode == 0 or "_state/science-review-queue.jsonl" not in lint_result.stdout:
+            print(lint_result.stdout)
+            raise SystemExit("lint eval did not fail on missing science review queue")
 
         normalization_vault = Path(tmp) / "normalization-vault"
         (normalization_vault / "claims").mkdir(parents=True)
@@ -132,6 +175,262 @@ def main() -> int:
             raise SystemExit("normalization eval did not flag a generic metric name")
         if "missing_baseline" not in baseline_warnings:
             raise SystemExit("normalization eval did not flag a missing baseline")
+
+        missing_anchor_vault = Path(tmp) / "missing-anchor-vault"
+        shutil.copytree(vault, missing_anchor_vault)
+        write_jsonl(
+            missing_anchor_vault / "claims" / "claims.jsonl",
+            [
+                {
+                    "claim_id": "claim-missing-anchor",
+                    "source_id": "LLM-0001",
+                    "claim_type": "metric",
+                    "predicate": "WMT 2014 EN-DE BLEU, base",
+                    "object": "27.3",
+                    "value": 27.3,
+                    "unit": "",
+                    "baseline": "prior systems",
+                    "normalized_value": 27.3,
+                    "evidence": "sources/LLM-0001.md#Missing Anchor",
+                    "concepts": ["attention-mechanisms"],
+                }
+            ],
+        )
+        qa_output = run(
+            [
+                sys.executable,
+                "scripts/wiki_semantic_qa.py",
+                str(missing_anchor_vault),
+                "--format",
+                "json",
+                "--fail-on",
+                "none",
+            ]
+        )
+        issues = json.loads(qa_output)["issues"]
+        if not any("heading anchor does not exist" in item["message"] for item in issues):
+            raise SystemExit("semantic QA eval did not flag a missing heading anchor")
+
+        unsupported_metric_vault = Path(tmp) / "unsupported-metric-vault"
+        shutil.copytree(vault, unsupported_metric_vault)
+        write_jsonl(
+            unsupported_metric_vault / "claims" / "claims.jsonl",
+            [
+                {
+                    "claim_id": "claim-unsupported-metric",
+                    "source_id": "LLM-0001",
+                    "claim_type": "metric",
+                    "predicate": "WMT 2014 EN-DE BLEU, base",
+                    "object": "99.9",
+                    "value": 99.9,
+                    "unit": "",
+                    "baseline": "prior systems",
+                    "normalized_value": 99.9,
+                    "evidence": "sources/LLM-0001.md#L31",
+                    "concepts": ["attention-mechanisms"],
+                }
+            ],
+        )
+        qa_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_semantic_qa.py",
+                str(unsupported_metric_vault),
+                "--format",
+                "json",
+                "--fail-on",
+                "p1",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if qa_result.returncode == 0:
+            raise SystemExit("semantic QA eval did not fail on an unsupported metric claim")
+        qa_issues = json.loads(qa_result.stdout)["issues"]
+        if not any(item["priority"] == "P1" for item in qa_issues):
+            raise SystemExit("semantic QA eval did not flag unsupported metric as P1")
+
+        review_vault = Path(tmp) / "review-vault"
+        (review_vault / "claims").mkdir(parents=True)
+        missing_protocol_claim = {
+            "claim_id": "claim-missing-protocol",
+            "source_id": "LLM-0001",
+            "claim_type": "metric",
+            "predicate": "Accuracy",
+            "object": "92%",
+            "value": 92,
+            "unit": "%",
+            "baseline": "baseline model",
+            "baseline_key": "baseline model",
+            "protocol_key": "",
+            "metric_key": "accuracy",
+            "normalized_value": 92,
+            "normalized_unit": "%",
+            "unit_family": "score",
+            "normalization_warnings": [],
+            "needs_review": False,
+            "evidence": "sources/LLM-0001.md#Key Data",
+            "concepts": [],
+        }
+        write_jsonl(review_vault / "claims" / "claims.jsonl", [missing_protocol_claim])
+        review_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_science_review.py",
+                str(review_vault),
+                "--format",
+                "json",
+                "--fail-on-review-required",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if review_result.returncode == 0:
+            raise SystemExit("science review eval did not fail on missing protocol context")
+        review_items = json.loads(review_result.stdout)["items"]
+        reasons = review_items[0].get("review_reasons", []) if review_items else []
+        if "scientific_context_review" not in reasons:
+            raise SystemExit("science review eval did not queue missing protocol context")
+
+        concept_vault = Path(tmp) / "concept-vault"
+        (concept_vault / "claims").mkdir(parents=True)
+        (concept_vault / "concepts").mkdir(parents=True)
+        (concept_vault / "concepts" / "evals.md").write_text("# Evals\n\nHand authored intro.\n", encoding="utf-8")
+        concept_claim = dict(missing_protocol_claim)
+        concept_claim["concepts"] = ["evals"]
+        write_jsonl(concept_vault / "claims" / "claims.jsonl", [concept_claim])
+        run([sys.executable, "scripts/wiki_concept_revision.py", str(concept_vault), "--apply"])
+        concept_text = (concept_vault / "concepts" / "evals.md").read_text(encoding="utf-8")
+        if "Accuracy: 92%" in concept_text or "Held for review in this concept: 1" not in concept_text:
+            raise SystemExit("concept revision eval did not hold missing-protocol claim for review")
+
+        contradiction_vault = Path(tmp) / "contradiction-vault"
+        (contradiction_vault / "claims").mkdir(parents=True)
+        write_jsonl(
+            contradiction_vault / "claims" / "claims.jsonl",
+            [
+                {
+                    "claim_id": "claim-a",
+                    "source_id": "LLM-0001",
+                    "claim_type": "metric",
+                    "predicate": "Accuracy",
+                    "object": "not parsed",
+                    "value": None,
+                    "unit": "",
+                    "metric_key": "accuracy",
+                    "normalized_value": 10.0,
+                    "normalized_unit": "score",
+                    "unit_family": "score",
+                    "concepts": ["evals"],
+                },
+                {
+                    "claim_id": "claim-b",
+                    "source_id": "LLM-0002",
+                    "claim_type": "metric",
+                    "predicate": "Accuracy",
+                    "object": "not parsed",
+                    "value": None,
+                    "unit": "",
+                    "metric_key": "accuracy",
+                    "normalized_value": 20.0,
+                    "normalized_unit": "score",
+                    "unit_family": "score",
+                    "concepts": ["evals"],
+                },
+            ],
+        )
+        contradiction_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_contradictions.py",
+                str(contradiction_vault),
+                "--format",
+                "json",
+                "--fail-on-candidate",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if contradiction_result.returncode == 0:
+            raise SystemExit("contradiction eval did not fail on normalized-value conflict")
+        conflicts = json.loads(contradiction_result.stdout)["conflicts"]
+        if not conflicts:
+            raise SystemExit("contradiction eval did not report normalized-value conflict")
+
+        queue_symlink_vault = Path(tmp) / "queue-symlink-vault"
+        shutil.copytree(vault, queue_symlink_vault)
+        outside_queue = Path(tmp) / "outside-queue.jsonl"
+        outside_queue.write_text("", encoding="utf-8")
+        if replace_with_symlink(queue_symlink_vault / "_state" / "growth-queue.jsonl", outside_queue):
+            queue_result = subprocess.run(
+                [sys.executable, "scripts/wiki_queue.py", str(queue_symlink_vault), "plan", "--cadence", "now"],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            if queue_result.returncode == 0 or outside_queue.read_text(encoding="utf-8"):
+                print(queue_result.stdout)
+                raise SystemExit("queue eval allowed growth queue symlink escape")
+
+        science_queue_symlink_vault = Path(tmp) / "science-queue-symlink-vault"
+        shutil.copytree(vault, science_queue_symlink_vault)
+        run([sys.executable, "scripts/wiki_claims.py", str(science_queue_symlink_vault)])
+        outside_science_queue = Path(tmp) / "outside-science-queue.jsonl"
+        outside_science_queue.write_text("", encoding="utf-8")
+        if replace_with_symlink(science_queue_symlink_vault / "_state" / "science-review-queue.jsonl", outside_science_queue):
+            science_result = subprocess.run(
+                [sys.executable, "scripts/wiki_science_review.py", str(science_queue_symlink_vault), "--queue"],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            if science_result.returncode == 0 or outside_science_queue.read_text(encoding="utf-8"):
+                print(science_result.stdout)
+                raise SystemExit("science review eval allowed queue symlink escape")
+
+        corpus_vault = Path(tmp) / "corpus-vault"
+        run([sys.executable, "scripts/wiki_init.py", str(corpus_vault), "--repo-root", str(ROOT)])
+        raw_dir = corpus_vault / "raw"
+        parsed_dir = raw_dir / "2501.00001_markdown"
+        parsed_dir.mkdir(parents=True)
+        (raw_dir / "2501.00001.pdf").write_bytes(b"%PDF-1.4\n% synthetic placeholder\n")
+        (parsed_dir / "combined.md").write_text(
+            "# DeepSeek Synthetic Evaluation Paper\n\n"
+            "Abstract\n\n"
+            "This paper studies DeepSeek benchmark evaluation for a synthetic model. "
+            "It reports 7B parameters and HumanEval accuracy at 71% under a stated protocol. "
+            "The content is long enough for corpus ingestion, source discovery, claim extraction, "
+            "metric normalization, semantic QA, and concept revision.\n\n"
+            "Results\n\n"
+            "HumanEval accuracy reaches 71% with baseline model 1.\n\n"
+            "Architecture\n\n"
+            "The model has 7B parameters for the experiment.\n",
+            encoding="utf-8",
+        )
+        run(
+            [
+                sys.executable,
+                "scripts/wiki_grow.py",
+                str(corpus_vault),
+                "--discover-sources",
+                "--ingest-corpus",
+                "--semantic-fail-on",
+                "none",
+                "--skip-lint",
+            ]
+        )
+        registry_rows = load_jsonl(corpus_vault / "_state" / "source-registry.jsonl")
+        kinds = {str(row.get("kind")) for row in registry_rows}
+        if not {"raw", "source"}.issubset(kinds):
+            raise SystemExit("grow eval did not refresh source registry after corpus ingest")
 
     print("runtime eval passed")
     return 0

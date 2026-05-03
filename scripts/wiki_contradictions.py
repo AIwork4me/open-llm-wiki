@@ -27,7 +27,10 @@ def normalize_predicate(text: str) -> str:
 def numeric_conflicts(claims: list[dict[str, object]], tolerance: float) -> list[dict[str, object]]:
     groups: dict[tuple[str, str, str], list[dict[str, object]]] = defaultdict(list)
     for claim in claims:
-        if claim.get("claim_type") != "metric" or claim.get("value") is None:
+        if (
+            claim.get("claim_type") != "metric"
+            or (claim.get("normalized_value") is None and claim.get("value") is None)
+        ):
             continue
         predicate = str(claim.get("metric_key") or normalize_predicate(str(claim.get("predicate", ""))))
         unit = str(claim.get("normalized_unit") or claim.get("unit", "")).lower()
@@ -113,11 +116,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Find contradiction candidates in claim graphs.")
     parser.add_argument("vault", type=Path)
     parser.add_argument("--claims", type=Path, help="Defaults to <vault>/claims/claims.jsonl.")
-    parser.add_argument("--tolerance", type=float, default=0.35)
-    parser.add_argument("--write-report", action="store_true")
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=0.35,
+        help="Relative numeric spread threshold for candidate conflicts. Defaults to 0.35.",
+    )
+    parser.add_argument(
+        "--write-report",
+        action="store_true",
+        help="Write qa-reports/claim-contradictions-YYYY-MM-DD.md, or --report when provided.",
+    )
     parser.add_argument("--report", type=Path, help="Defaults to <vault>/qa-reports/claim-contradictions-YYYY-MM-DD.md.")
     parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
-    parser.add_argument("--fail-on-candidate", action="store_true")
+    parser.add_argument(
+        "--fail-on-candidate",
+        action="store_true",
+        help="Exit non-zero when numeric contradiction candidates are found.",
+    )
     args = parser.parse_args()
 
     vault = args.vault.resolve()

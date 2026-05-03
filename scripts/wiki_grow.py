@@ -28,10 +28,19 @@ def main() -> int:
     parser.add_argument("--plan-queue", action="store_true", help="Plan durable growth queue tasks.")
     parser.add_argument("--queue-cadence", choices=["now", "daily", "weekly", "monthly"], default="now", help="Cadence used when planning queue tasks.")
     parser.add_argument("--skip-queue", action="store_true", help="Do not plan queue tasks when called by the queue runner.")
-    parser.add_argument("--apply-concept-revision", action="store_true")
+    parser.add_argument(
+        "--apply-concept-revision",
+        action="store_true",
+        help="Apply concept revision writes; without this flag concept revision runs in preview mode.",
+    )
     parser.add_argument("--science-review", action="store_true", help="Write a second-pass scientific review packet.")
-    parser.add_argument("--semantic-fail-on", choices=["none", "p0", "p1", "p2"], default="p1")
-    parser.add_argument("--skip-lint", action="store_true")
+    parser.add_argument(
+        "--semantic-fail-on",
+        choices=["none", "p0", "p1", "p2"],
+        default="p1",
+        help="Severity threshold passed to semantic QA.",
+    )
+    parser.add_argument("--skip-lint", action="store_true", help="Skip the final wiki_lint.py validation step.")
     args = parser.parse_args()
 
     vault = str(args.vault.resolve())
@@ -39,6 +48,8 @@ def main() -> int:
         run([sys.executable, str(SCRIPTS / "wiki_discover_sources.py"), vault])
     if args.ingest_corpus:
         run([sys.executable, str(SCRIPTS / "wiki_ingest_corpus.py"), vault, "--resume"])
+        if args.discover_sources:
+            run([sys.executable, str(SCRIPTS / "wiki_discover_sources.py"), vault])
     if args.plan_queue and not args.skip_queue:
         run([sys.executable, str(SCRIPTS / "wiki_queue.py"), vault, "plan", "--cadence", args.queue_cadence])
     run([sys.executable, str(SCRIPTS / "wiki_claims.py"), vault])

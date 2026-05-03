@@ -27,7 +27,15 @@ from wiki_common import (
 
 
 REQUIRED_DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "claims", "templates", "_state", "log-archive"]
-REQUIRED_FILES = ["SCHEMA.md", "index.md", "log.md", "_state/id-counter.md", "_state/growth-queue.jsonl", "_state/source-registry.jsonl"]
+REQUIRED_FILES = [
+    "SCHEMA.md",
+    "index.md",
+    "log.md",
+    "_state/id-counter.md",
+    "_state/growth-queue.jsonl",
+    "_state/source-registry.jsonl",
+    "_state/science-review-queue.jsonl",
+]
 SOURCE_FIELDS = {"id", "title", "status", "created", "updated", "source", "tags"}
 CONCEPT_FIELDS = {"id", "title", "created", "updated"}
 STALE_WORDS = ("latest", "current", "state of the art", "sota", "now")
@@ -222,8 +230,18 @@ def lint(vault: Path) -> list[Finding]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lint an open-llm-wiki vault.")
     parser.add_argument("vault", type=Path)
-    parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
-    parser.add_argument("--fail-on", choices=["none", "p0", "p1", "p2"], default="p1")
+    parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format for the lint report.",
+    )
+    parser.add_argument(
+        "--fail-on",
+        choices=["none", "p0", "p1", "p2"],
+        default="p1",
+        help="Exit non-zero at this severity threshold: p0 only, p1 includes P0/P1, p2 includes P0/P1/P2, none never fails.",
+    )
     args = parser.parse_args()
 
     vault = args.vault.resolve()
