@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,14 @@ def run(cmd: list[str], cwd: Path = ROOT) -> str:
         print(result.stdout)
         raise SystemExit(result.returncode)
     return result.stdout
+
+
+def load_jsonl(path: Path) -> list[dict[str, object]]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def main() -> int:
@@ -64,6 +73,17 @@ def main() -> int:
                 "--apply-concept-revision",
             ]
         )
+        rows = load_jsonl(growth_vault / "claims" / "claims.jsonl")
+        layer_claims = [row for row in rows if row.get("predicate") == "Base model layers"]
+        if not layer_claims:
+            raise SystemExit("claim eval did not extract Base model layers")
+        layer_claim = layer_claims[0]
+        if (
+            layer_claim.get("value") is not None
+            or layer_claim.get("unit")
+            or not layer_claim.get("needs_review")
+        ):
+            raise SystemExit("claim eval treated a compound layer count as a scalar metric")
         run([sys.executable, "scripts/wiki_queue.py", str(growth_vault), "list"])
         run([sys.executable, "scripts/wiki_lint.py", str(growth_vault), "--fail-on", "p1"])
 

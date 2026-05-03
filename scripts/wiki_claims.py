@@ -51,12 +51,30 @@ def parse_table_rows(block: str) -> list[list[str]]:
 
 
 def parse_value(value: str) -> tuple[float | None, str]:
-    match = NUMBER_RE.search(value.replace(",", ""))
-    if not match:
+    normalized = value.replace(",", "")
+    matches = list(NUMBER_RE.finditer(normalized))
+    if len(matches) != 1:
+        return None, ""
+    match = matches[0]
+    prefix = normalized[: match.start()].strip().lower()
+    suffix = normalized[match.end() :].strip()
+    if prefix not in {"", "about", "approx", "approx.", "approximately", "~"} or suffix:
         return None, ""
     number = float(match.group(1))
     unit = match.group(2) or ""
     return number, unit
+
+
+def has_numeric_text(value: str) -> bool:
+    return NUMBER_RE.search(value.replace(",", "")) is not None
+
+
+def needs_metric_review(raw_value: str, evidence: str, numeric: float | None) -> bool:
+    return (
+        "not available" in evidence.lower()
+        or not evidence
+        or (numeric is None and has_numeric_text(raw_value))
+    )
 
 
 def concept_links(body: str, concept_names: set[str]) -> list[str]:
@@ -117,7 +135,7 @@ def metric_claims(source_id: str, title: str, body: str, concepts: list[str], re
                 "evidence": evidence,
                 "concepts": concepts,
                 "confidence": 0.82 if evidence else 0.55,
-                "needs_review": "not available" in evidence.lower() or not evidence,
+                "needs_review": needs_metric_review(raw_value, evidence, numeric),
             }
         )
     return claims
