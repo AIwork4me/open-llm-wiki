@@ -184,6 +184,34 @@ def check_setup_script() -> None:
         fail("setup.sh must clean temp directory with trap")
 
 
+def check_pdf_to_markdown_help() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/pdf_to_markdown.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        fail("pdf_to_markdown.py --help failed")
+    required = [
+        "API settings:",
+        "OPEN_LLM_WIKI_LAYOUT_TOKEN",
+        "AI_STUDIO_LAYOUT_TOKEN",
+        "OPEN_LLM_WIKI_LAYOUT_API_URL",
+        "Output behavior:",
+        "doc_*.md",
+        "combined Markdown",
+        "manifest.json",
+        "--dry-run",
+    ]
+    missing = [item for item in required if item not in result.stdout]
+    if missing:
+        print(result.stdout)
+        fail(f"pdf_to_markdown.py --help missing expected guidance: {missing}")
+
+
 def run_runtime_checks() -> None:
     commands = [
         [sys.executable, "scripts/wiki_lint.py", "examples/minimal-vault", "--fail-on", "p1"],
@@ -239,6 +267,7 @@ def main() -> None:
     check_docs()
     check_minimal_vault()
     check_setup_script()
+    check_pdf_to_markdown_help()
     run_runtime_checks()
     check_safety_boundaries()
     print("quality checks passed")
