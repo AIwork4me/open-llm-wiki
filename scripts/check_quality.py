@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -232,6 +233,40 @@ def check_safety_boundaries() -> None:
         if "must stay inside the vault" not in result.stdout:
             print(result.stdout)
             fail("normalization boundary failure did not explain the vault constraint")
+
+        revision_vault = Path(tmp) / "revision-vault"
+        shutil.copytree(vault, revision_vault)
+        raw_target = revision_vault / "raw" / "evil.md"
+        raw_target.write_text("# Raw evidence placeholder\n", encoding="utf-8")
+        (revision_vault / "claims" / "claims.jsonl").write_text(
+            (
+                '{"claim_id":"claim-unsafe","source_id":"LLM-0001",'
+                '"claim_type":"contribution",'
+                '"object":"unsafe concept id should not rewrite raw",'
+                '"evidence":"sources/LLM-0001.md#L1",'
+                '"concepts":["../raw/evil"],"needs_review":false}\n'
+            ),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_concept_revision.py",
+                str(revision_vault),
+                "--apply",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            fail("concept revision accepted a target outside concepts/")
+        if "under concepts/" not in result.stdout:
+            print(result.stdout)
+            fail("concept revision boundary failure did not explain the concepts/ constraint")
+        if "Semantic Claim Matrix" in raw_target.read_text(encoding="utf-8"):
+            fail("concept revision modified raw evidence through an unsafe concept id")
 
 
 def main() -> None:
