@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from wiki_common import read_text, write_text
+from wiki_common import ensure_within, read_text, write_text
 
 
 VALID_ACTIONS = {"discover", "grow", "science-review", "concept-revision", "lint"}
@@ -121,7 +121,8 @@ def main() -> int:
     args = parser.parse_args()
 
     vault = args.vault.resolve()
-    queue_path = vault / "_state" / "growth-queue.jsonl"
+    state_dir = ensure_within(vault / "_state", vault, "_state must stay inside the vault")
+    queue_path = ensure_within(state_dir / "growth-queue.jsonl", state_dir, "growth queue must stay inside _state")
     rows = load_queue(queue_path)
     if args.command == "init":
         save_queue(queue_path, rows)
@@ -147,7 +148,7 @@ def main() -> int:
         return 0
     if args.command == "run-due":
         due_now = datetime.now().isoformat()
-        for row in sorted(rows, key=lambda item: (item.get("priority", 50), item.get("due_at", ""))):
+        for row in sorted(rows, key=lambda item: (item.get("due_at", ""), item.get("priority", 50))):
             if row.get("status") != "pending" or str(row.get("due_at", "")) > due_now:
                 continue
             print(f"run {row['task_id']}: {row['action']}")

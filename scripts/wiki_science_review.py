@@ -21,7 +21,11 @@ def review_items(claims: list[dict[str, object]], limit: int) -> list[dict[str, 
         warnings = list(claim.get("normalization_warnings", []))
         if claim.get("needs_review"):
             warnings.append("claim_marked_needs_review")
-        if claim.get("claim_type") == "metric" and (not claim.get("baseline_key") or "generic_metric_name" in warnings):
+        if claim.get("claim_type") == "metric" and (
+            not claim.get("baseline_key")
+            or not claim.get("protocol_key")
+            or "generic_metric_name" in warnings
+        ):
             warnings.append("scientific_context_review")
         if warnings:
             item = dict(claim)
@@ -84,7 +88,11 @@ def main() -> int:
     parser.add_argument("vault", type=Path)
     parser.add_argument("--claims", type=Path, help="Defaults to <vault>/claims/claims.jsonl.")
     parser.add_argument("--queue", action="store_true", help="Write _state/science-review-queue.jsonl.")
-    parser.add_argument("--write-report", action="store_true")
+    parser.add_argument(
+        "--write-report",
+        action="store_true",
+        help="Write qa-reports/science-review-YYYY-MM-DD.md, or --report when provided.",
+    )
     parser.add_argument("--report", type=Path, help="Defaults to <vault>/qa-reports/science-review-YYYY-MM-DD.md.")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--fail-on-review-required", action="store_true")
@@ -95,7 +103,12 @@ def main() -> int:
     claims_path = (args.claims or vault / "claims" / "claims.jsonl").resolve()
     items = review_items(load_claims(claims_path), args.limit)
     if args.queue:
-        queue_path = vault / "_state" / "science-review-queue.jsonl"
+        state_dir = ensure_within(vault / "_state", vault, "_state must stay inside the vault")
+        queue_path = ensure_within(
+            state_dir / "science-review-queue.jsonl",
+            state_dir,
+            "science review queue must stay inside _state",
+        )
         write_jsonl(queue_path, items)
     if args.write_report:
         report = ensure_within(

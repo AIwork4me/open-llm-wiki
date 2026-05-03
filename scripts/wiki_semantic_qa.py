@@ -37,20 +37,41 @@ def load_claims(path: Path) -> list[dict[str, object]]:
     return claims
 
 
-def evidence_target(vault: Path, evidence: str) -> tuple[Path | None, int | None]:
+def evidence_target(vault: Path, evidence: str) -> tuple[Path | None, int | None, str]:
     target = evidence.split("#", 1)[0].strip()
     if not target or target.startswith("http"):
-        return None, None
+        return None, None, ""
     if "/" not in target and "\\" not in target and not target.endswith((".md", ".txt", ".pdf", ".jsonl")):
-        return None, None
+        return None, None, ""
     path = (vault / target).resolve()
     try:
         path.relative_to(vault.resolve())
     except ValueError:
-        return None, None
+        return None, None, ""
     line_match = re.search(r"#L(\d+)", evidence)
     line_number = int(line_match.group(1)) if line_match else None
-    return path, line_number
+    fragment = evidence.split("#", 1)[1].strip() if "#" in evidence and line_number is None else ""
+    return path, line_number, fragment
+
+
+def slug(text: str) -> str:
+    clean = re.sub(r"[^\w\s-]", "", text.lower())
+    return re.sub(r"[\s-]+", "-", clean).strip("-")
+
+
+def heading_exists(path: Path, fragment: str) -> bool:
+    if not fragment or path.suffix.lower() != ".md":
+        return True
+    expected = fragment.strip().lower()
+    expected_slug = slug(fragment)
+    for line in read_text(path).splitlines():
+        match = re.match(r"^#{1,6}\s+(.+?)\s*#*\s*$", line)
+        if not match:
+            continue
+        heading = match.group(1).strip().lower()
+        if expected == heading or expected_slug == slug(heading):
+            return True
+    return False
 
 
 def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
@@ -72,12 +93,15 @@ def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
             continue
         if claim.get("claim_type") == "metric" and "normalized_value" not in claim:
             issues.append(Issue("P2", subject, "metric claim has not been normalized"))
-        path, line_number = evidence_target(vault, evidence)
+        path, line_number, fragment = evidence_target(vault, evidence)
         if path is None:
             issues.append(Issue("P2", subject, f"evidence is human-readable but not machine-resolvable: {evidence}"))
             continue
         if not path.exists():
             issues.append(Issue("P1", subject, f"evidence path does not exist: {evidence}"))
+            continue
+        if not heading_exists(path, fragment):
+            issues.append(Issue("P1", subject, f"evidence heading anchor does not exist: {evidence}"))
             continue
         if line_number is not None:
             lines = read_text(path).splitlines()
@@ -86,7 +110,7 @@ def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
                 continue
             value = claim.get("object")
             if value and str(value) not in lines[line_number - 1] and claim.get("claim_type") == "metric":
-                issues.append(Issue("P2", subject, f"metric value is not visible on anchored line: {evidence}"))
+                issues.append(Issue("P1", subject, f"metric value is not visible on anchored line: {evidence}"))
     for source_id in sorted(source_ids):
         if claims_by_source.get(source_id, 0) == 0:
             issues.append(Issue("P1", source_id, "stable source has no extracted claims"))
@@ -148,7 +172,15 @@ def main() -> int:
     parser.add_argument("--write-report", action="store_true")
     parser.add_argument("--report", type=Path, help="Defaults to <vault>/qa-reports/semantic-qa-YYYY-MM-DD.md.")
     parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
-    parser.add_argument("--fail-on", choices=["none", "p0", "p1", "p2"], default="p1")
+    parser.add_argument(
+        "--fail-on",
+        choices=["none", "p0", "p1", "p2"],
+        default="p1",
+        help=(
+            "Failure threshold: none never exits non-zero; p0 fails on P0; "
+            "p1 fails on P0/P1; p2 fails on P0/P1/P2. Defaults to p1."
+        ),
+    )
     args = parser.parse_args()
 
     vault = args.vault.resolve()

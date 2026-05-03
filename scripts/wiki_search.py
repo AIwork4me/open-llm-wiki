@@ -43,10 +43,10 @@ def search(vault: Path, query: str, limit: int) -> list[dict[str, object]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Search an open-llm-wiki vault.")
-    parser.add_argument("vault", type=Path)
-    parser.add_argument("query")
-    parser.add_argument("--limit", type=int, default=5)
-    parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    parser.add_argument("vault", type=Path, help="Vault root to search.")
+    parser.add_argument("query", help="Search terms to match against source and concept pages.")
+    parser.add_argument("--limit", type=int, default=5, help="Maximum number of matching pages to return.")
+    parser.add_argument("--format", choices=["markdown", "json"], default="markdown", help="Output format for search results.")
     args = parser.parse_args()
 
     results = search(args.vault.resolve(), args.query, args.limit)
