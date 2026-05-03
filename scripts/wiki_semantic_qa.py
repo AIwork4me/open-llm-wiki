@@ -86,7 +86,7 @@ def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
                 continue
             value = claim.get("object")
             if value and str(value) not in lines[line_number - 1] and claim.get("claim_type") == "metric":
-                issues.append(Issue("P2", subject, f"metric value is not visible on anchored line: {evidence}"))
+                issues.append(Issue("P1", subject, f"metric value is not visible on anchored line: {evidence}"))
     for source_id in sorted(source_ids):
         if claims_by_source.get(source_id, 0) == 0:
             issues.append(Issue("P1", source_id, "stable source has no extracted claims"))

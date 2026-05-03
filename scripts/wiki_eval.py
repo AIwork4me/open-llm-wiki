@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,46 @@ def main() -> int:
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])
+
+        qa_vault = Path(tmp) / "qa-vault"
+        shutil.copytree(vault, qa_vault)
+        claim = {
+            "claim_id": "claim-unsupported-metric",
+            "source_id": "LLM-0001",
+            "claim_type": "metric",
+            "predicate": "WMT 2014 EN-DE BLEU, base",
+            "object": "99.9",
+            "value": 99.9,
+            "unit": "",
+            "baseline": "prior systems",
+            "normalized_value": 99.9,
+            "evidence": "sources/LLM-0001.md#L31",
+            "concepts": ["attention-mechanisms"],
+        }
+        (qa_vault / "claims" / "claims.jsonl").write_text(
+            json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        qa_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_semantic_qa.py",
+                str(qa_vault),
+                "--format",
+                "json",
+                "--fail-on",
+                "p1",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if qa_result.returncode == 0:
+            raise SystemExit("semantic QA eval did not fail on an unsupported metric claim")
+        qa_issues = json.loads(qa_result.stdout)["issues"]
+        if not any(item["priority"] == "P1" for item in qa_issues):
+            raise SystemExit("semantic QA eval did not flag unsupported metric as P1")
 
     print("runtime eval passed")
     return 0
