@@ -234,6 +234,46 @@ def check_safety_boundaries() -> None:
             fail("normalization boundary failure did not explain the vault constraint")
 
 
+def check_corpus_ingest_fresh_vault() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("fresh vault initialization failed")
+        markdown_dir = vault / "raw" / "DeepSeek_Test_2401.00001_markdown"
+        markdown_dir.mkdir(parents=True)
+        (vault / "raw" / "DeepSeek_Test_2401.00001.pdf").write_bytes(b"%PDF-1.4 fake")
+        (markdown_dir / "combined.md").write_text(
+            "# DeepSeek Test Model\n\n"
+            "Abstract\n"
+            "DeepSeek Test Model uses 2B parameters and 1.5B training tokens for code and math benchmarks. "
+            "HumanEval score is 75% against a 60% baseline and MATH score is 62% across 500 samples.\n\n"
+            "1 Introduction\n"
+            "The model has 2B parameters and uses 1.5B tokens during training for code and math benchmarks.\n",
+            encoding="utf-8",
+        )
+        ingest_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(vault), "--today", "2026-05-03"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if ingest_result.returncode != 0:
+            print(ingest_result.stdout)
+            fail("fresh vault corpus ingest failed")
+        if not (vault / "sources" / "LLM-0001.md").exists():
+            print(ingest_result.stdout)
+            fail("fresh vault corpus ingest did not create sources/LLM-0001.md")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -241,6 +281,7 @@ def main() -> None:
     check_setup_script()
     run_runtime_checks()
     check_safety_boundaries()
+    check_corpus_ingest_fresh_vault()
     print("quality checks passed")
 
 

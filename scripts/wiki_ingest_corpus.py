@@ -361,7 +361,8 @@ def main() -> int:
     if args.resume and existing_sources:
         print(f"existing_sources={len(existing_sources)}; corpus ingest skipped in resume mode")
         return 0
-    if not args.resume and not args.force_empty and any((vault / folder).glob("*.md") for folder in ["sources", "concepts", "qa-reports"]):
+    has_existing_pages = any(any((vault / folder).glob("*.md")) for folder in ["sources", "concepts", "qa-reports"])
+    if not args.resume and not args.force_empty and has_existing_pages:
         raise SystemExit("refusing to overwrite existing wiki pages; use --resume or --force-empty")
 
     combined_files = sorted((vault / "raw").glob("*_markdown/combined.md"))
