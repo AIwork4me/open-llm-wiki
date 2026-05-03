@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -184,6 +185,30 @@ def check_setup_script() -> None:
         fail("setup.sh must clean temp directory with trap")
 
 
+def check_setup_runtime() -> None:
+    python_bin = shutil.which("python3") or shutil.which("python")
+    if not python_bin:
+        fail("setup runtime smoke test requires python3 or python")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        result = subprocess.run(
+            [
+                python_bin,
+                "scripts/wiki_init.py",
+                str(Path(tmp) / "vault"),
+                "--repo-root",
+                str(ROOT),
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("setup runtime smoke test failed")
+
+
 def run_runtime_checks() -> None:
     commands = [
         [sys.executable, "scripts/wiki_lint.py", "examples/minimal-vault", "--fail-on", "p1"],
@@ -239,6 +264,7 @@ def main() -> None:
     check_docs()
     check_minimal_vault()
     check_setup_script()
+    check_setup_runtime()
     run_runtime_checks()
     check_safety_boundaries()
     print("quality checks passed")
