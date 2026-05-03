@@ -148,7 +148,15 @@ def main() -> int:
     parser.add_argument("--write-report", action="store_true")
     parser.add_argument("--report", type=Path, help="Defaults to <vault>/qa-reports/semantic-qa-YYYY-MM-DD.md.")
     parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
-    parser.add_argument("--fail-on", choices=["none", "p0", "p1", "p2"], default="p1")
+    parser.add_argument(
+        "--fail-on",
+        choices=["none", "p0", "p1", "p2"],
+        default="p1",
+        help=(
+            "Failure threshold: none never exits non-zero; p0 fails on P0; "
+            "p1 fails on P0/P1; p2 fails on P0/P1/P2. Defaults to p1."
+        ),
+    )
     args = parser.parse_args()
 
     vault = args.vault.resolve()

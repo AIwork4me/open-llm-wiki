@@ -209,6 +209,16 @@ def run_runtime_checks() -> None:
             print(result.stdout)
             fail(f"runtime check failed: {' '.join(command)}")
 
+    semantic_help = subprocess.run(
+        [sys.executable, "scripts/wiki_semantic_qa.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "p1 fails on P0/P1" not in semantic_help.stdout:
+        fail("semantic QA help must document fail-on severity thresholds")
+
 
 def check_safety_boundaries() -> None:
     vault = ROOT / "examples" / "minimal-vault"
