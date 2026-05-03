@@ -49,8 +49,10 @@ cp -R open-llm-wiki/skills/* ~/.claude/skills/
 
 mkdir -p my-llm-wiki/{raw,sources,concepts,drafts,qa-reports,templates,_state,log-archive}
 mkdir -p my-llm-wiki/claims
+mkdir -p my-llm-wiki/.open-llm-wiki/scripts
 cp open-llm-wiki/SCHEMA.md my-llm-wiki/
 cp open-llm-wiki/templates/* my-llm-wiki/templates/
+cp open-llm-wiki/scripts/*.py my-llm-wiki/.open-llm-wiki/scripts/
 ```
 
 Create `my-llm-wiki/_state/id-counter.md`:
