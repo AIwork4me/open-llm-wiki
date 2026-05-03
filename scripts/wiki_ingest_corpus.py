@@ -381,7 +381,21 @@ def merge_index(vault: Path, items: list[Item], concept_items: dict[str, list[It
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Ingest raw/*_markdown/combined.md files into source pages.")
+    parser = argparse.ArgumentParser(
+        description="Ingest raw/*_markdown/combined.md files into source pages.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Workflow:\n"
+            "  Reads each raw/*_markdown/combined.md file, creates draft source pages, runs deterministic\n"
+            "  QA report generation, publishes passing pages to sources/LLM-NNNN.md, writes contradiction\n"
+            "  reports, updates concept pages, index.md, log.md, and _state/id-counter.md.\n"
+            "\n"
+            "Resume behavior:\n"
+            "  By default, existing source/concept/QA pages are protected. Use --resume to skip already\n"
+            "  existing source IDs and continue any remaining raw/*_markdown/combined.md files. Use\n"
+            "  --force-empty only for a controlled regenerated corpus vault.\n"
+        ),
+    )
     parser.add_argument("vault", type=Path)
     parser.add_argument("--today", default=datetime.now().strftime("%Y-%m-%d"))
     parser.add_argument("--resume", action="store_true", help="Skip existing source IDs instead of refusing existing output.")
@@ -392,8 +406,9 @@ def main() -> int:
     vault = args.vault.resolve()
     for folder in ["raw", "sources", "concepts", "drafts", "qa-reports", "_state"]:
         (vault / folder).mkdir(parents=True, exist_ok=True)
-    existing_sources = sorted((vault / "sources").glob("LLM-*.md"))
-    if not args.resume and not args.force_empty and any((vault / folder).glob("*.md") for folder in ["sources", "concepts", "qa-reports"]):
+    if not args.resume and not args.force_empty and any(
+        any((vault / folder).glob("*.md")) for folder in ["sources", "concepts", "qa-reports"]
+    ):
         raise SystemExit("refusing to overwrite existing wiki pages; use --resume or --force-empty")
 
     combined_files = sorted((vault / "raw").glob("*_markdown/combined.md"))

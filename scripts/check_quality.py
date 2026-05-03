@@ -283,6 +283,35 @@ def check_setup_runtime() -> None:
             fail("setup runtime smoke test failed")
 
 
+def check_ingest_corpus_help() -> None:
+    result = subprocess.run(
+        [sys.executable, "scripts/wiki_ingest_corpus.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        fail("wiki_ingest_corpus.py --help failed")
+    required = [
+        "raw/*_markdown/combined.md",
+        "draft source pages",
+        "QA report generation",
+        "sources/LLM-NNNN.md",
+        "contradiction",
+        "concept pages",
+        "index.md",
+        "log.md",
+        "Resume behavior:",
+        "--resume",
+    ]
+    missing = [item for item in required if item not in result.stdout]
+    if missing:
+        print(result.stdout)
+        fail(f"wiki_ingest_corpus.py --help missing expected guidance: {missing}")
+
+
 def check_pdf_to_markdown_help() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/pdf_to_markdown.py", "--help"],
@@ -412,9 +441,9 @@ def check_safety_boundaries() -> None:
         )
         if result.returncode == 0:
             fail("normalization accepted an output path outside the vault")
-        if "must stay inside the vault" not in result.stdout:
+        if "under claims/" not in result.stdout:
             print(result.stdout)
-            fail("normalization boundary failure did not explain the vault constraint")
+            fail("normalization boundary failure did not explain the claims/ constraint")
 
         outside_claims = Path(tmp) / "outside-claims.jsonl"
         outside_claims.write_text(read(vault / "claims" / "claims.jsonl"), encoding="utf-8")
@@ -440,6 +469,43 @@ def check_safety_boundaries() -> None:
             fail("normalization in-place boundary failure did not explain the vault constraint")
         if read(outside_claims) != original_claims:
             fail("normalization modified an in-place claims path outside the vault")
+
+        normalize_vault = Path(tmp) / "normalize-vault"
+        shutil.copytree(vault, normalize_vault)
+        raw_target = normalize_vault / "raw" / "evil.md"
+        raw_target.write_text("# Raw evidence placeholder\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_claims.py", str(normalize_vault)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("failed to prepare claims for normalization boundary check")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_normalize_metrics.py",
+                str(normalize_vault),
+                "--output",
+                str(raw_target),
+                "--report",
+                str(normalize_vault / "claims" / "metric-normalization-report.md"),
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            fail("normalization accepted an output path outside claims/")
+        if "under claims/" not in result.stdout:
+            print(result.stdout)
+            fail("normalization output boundary failure did not explain the claims/ constraint")
+        if "claim_id" in raw_target.read_text(encoding="utf-8"):
+            fail("normalization modified raw evidence through an unsafe output path")
 
         writeback_vault = Path(tmp) / "writeback-vault"
         shutil.copytree(vault, writeback_vault)
@@ -618,6 +684,46 @@ def check_source_discovery_arxiv_filename() -> None:
             fail("source discovery did not extract arXiv ID from filename")
 
 
+def check_corpus_ingest_fresh_vault() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("fresh vault initialization failed")
+        markdown_dir = vault / "raw" / "DeepSeek_Test_2401.00001_markdown"
+        markdown_dir.mkdir(parents=True)
+        (vault / "raw" / "DeepSeek_Test_2401.00001.pdf").write_bytes(b"%PDF-1.4 fake")
+        (markdown_dir / "combined.md").write_text(
+            "# DeepSeek Test Model\n\n"
+            "Abstract\n"
+            "DeepSeek Test Model uses 2B parameters and 1.5B training tokens for code and math benchmarks. "
+            "HumanEval score is 75% against a 60% baseline and MATH score is 62% across 500 samples.\n\n"
+            "1 Introduction\n"
+            "The model has 2B parameters and uses 1.5B tokens during training for code and math benchmarks.\n",
+            encoding="utf-8",
+        )
+        ingest_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(vault), "--today", "2026-05-03"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if ingest_result.returncode != 0:
+            print(ingest_result.stdout)
+            fail("fresh vault corpus ingest failed")
+        if not (vault / "sources" / "LLM-0001.md").exists():
+            print(ingest_result.stdout)
+            fail("fresh vault corpus ingest did not create sources/LLM-0001.md")
+
+
 def check_corpus_ingest_resume_continues() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
@@ -694,6 +800,7 @@ def main() -> None:
     check_setup_script()
     check_setup_python_probe()
     check_setup_runtime()
+    check_ingest_corpus_help()
     check_pdf_to_markdown_help()
     run_runtime_checks()
     check_pdf_to_markdown_http_errors()
@@ -701,6 +808,7 @@ def main() -> None:
     check_pdf_corpus_report_short_outputs()
     check_pdf_corpus_report_parser_warnings()
     check_source_discovery_arxiv_filename()
+    check_corpus_ingest_fresh_vault()
     check_corpus_ingest_resume_continues()
     print("quality checks passed")
 
