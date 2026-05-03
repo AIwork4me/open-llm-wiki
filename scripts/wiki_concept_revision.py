@@ -32,7 +32,11 @@ def review_reasons(claim: dict[str, object]) -> list[str]:
     reasons = list(claim.get("normalization_warnings", []))
     if claim.get("needs_review"):
         reasons.append("claim_marked_needs_review")
-    if claim.get("claim_type") == "metric" and (not claim.get("baseline_key") or "generic_metric_name" in reasons):
+    if claim.get("claim_type") == "metric" and (
+        not claim.get("baseline_key")
+        or not claim.get("protocol_key")
+        or "generic_metric_name" in reasons
+    ):
         reasons.append("scientific_context_review")
     return sorted(set(str(reason) for reason in reasons if reason))
 

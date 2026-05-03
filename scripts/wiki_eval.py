@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,42 @@ def main() -> int:
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])
+
+        concept_vault = Path(tmp) / "concept-vault"
+        (concept_vault / "claims").mkdir(parents=True)
+        (concept_vault / "concepts").mkdir(parents=True)
+        (concept_vault / "concepts" / "evals.md").write_text(
+            "# Evals\n\nHand authored intro.\n",
+            encoding="utf-8",
+        )
+        claim = {
+            "claim_id": "claim-missing-protocol",
+            "source_id": "LLM-0001",
+            "claim_type": "metric",
+            "predicate": "Accuracy",
+            "object": "92%",
+            "value": 92,
+            "unit": "%",
+            "baseline": "baseline model",
+            "baseline_key": "baseline model",
+            "protocol_key": "",
+            "metric_key": "accuracy",
+            "normalized_value": 92,
+            "normalized_unit": "%",
+            "unit_family": "score",
+            "normalization_warnings": [],
+            "needs_review": False,
+            "evidence": "sources/LLM-0001.md#Key Data",
+            "concepts": ["evals"],
+        }
+        (concept_vault / "claims" / "claims.jsonl").write_text(
+            json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        run([sys.executable, "scripts/wiki_concept_revision.py", str(concept_vault), "--apply"])
+        concept_text = (concept_vault / "concepts" / "evals.md").read_text(encoding="utf-8")
+        if "Accuracy: 92%" in concept_text or "Held for review in this concept: 1" not in concept_text:
+            raise SystemExit("concept revision eval did not hold missing-protocol claim for review")
 
     print("runtime eval passed")
     return 0
