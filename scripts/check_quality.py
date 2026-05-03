@@ -233,6 +233,31 @@ def check_safety_boundaries() -> None:
             print(result.stdout)
             fail("normalization boundary failure did not explain the vault constraint")
 
+        outside_claims = Path(tmp) / "outside-claims.jsonl"
+        outside_claims.write_text(read(vault / "claims" / "claims.jsonl"), encoding="utf-8")
+        original_claims = read(outside_claims)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_normalize_metrics.py",
+                str(vault),
+                "--claims",
+                str(outside_claims),
+                "--in-place",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            fail("normalization accepted an in-place claims path outside the vault")
+        if "must stay inside the vault" not in result.stdout:
+            print(result.stdout)
+            fail("normalization in-place boundary failure did not explain the vault constraint")
+        if read(outside_claims) != original_claims:
+            fail("normalization modified an in-place claims path outside the vault")
+
 
 def main() -> None:
     check_skills()
