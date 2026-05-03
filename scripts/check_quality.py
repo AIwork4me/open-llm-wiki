@@ -234,6 +234,36 @@ def check_safety_boundaries() -> None:
             fail("normalization boundary failure did not explain the vault constraint")
 
 
+def check_pdf_corpus_report_short_outputs() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        raw_dir = Path(tmp) / "raw"
+        output_dir = raw_dir / "paper_markdown"
+        output_dir.mkdir(parents=True)
+        (raw_dir / "paper.pdf").write_bytes(b"%PDF-1.4 fake")
+        (output_dir / "combined.md").write_text("tiny\n", encoding="utf-8")
+        (output_dir / "manifest.json").write_text('{"attempts": 1}\n', encoding="utf-8")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pdf_corpus_report.py",
+                str(raw_dir),
+                "--fail-on-short",
+                "--min-combined-bytes",
+                "100",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode == 0:
+            print(result.stdout)
+            fail("corpus report accepted a suspiciously short combined Markdown output")
+        if "short_files: 1" not in result.stdout:
+            print(result.stdout)
+            fail("corpus report did not identify the short combined Markdown output")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -241,6 +271,7 @@ def main() -> None:
     check_setup_script()
     run_runtime_checks()
     check_safety_boundaries()
+    check_pdf_corpus_report_short_outputs()
     print("quality checks passed")
 
 
