@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -20,6 +21,22 @@ def run(cmd: list[str], cwd: Path = ROOT) -> str:
         print(result.stdout)
         raise SystemExit(result.returncode)
     return result.stdout
+
+
+def load_jsonl(path: Path) -> list[dict[str, object]]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
+    text = "".join(
+        json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+        for row in rows
+    )
+    path.write_text(text, encoding="utf-8")
 
 
 def main() -> int:
@@ -70,6 +87,31 @@ def main() -> int:
         test_vault = Path(tmp) / "vault"
         run([sys.executable, "scripts/wiki_init.py", str(test_vault), "--repo-root", str(ROOT)])
         run([sys.executable, "scripts/wiki_lint.py", str(test_vault), "--fail-on", "p1"])
+
+        normalization_vault = Path(tmp) / "normalization-vault"
+        (normalization_vault / "claims").mkdir(parents=True)
+        write_jsonl(
+            normalization_vault / "claims" / "claims.jsonl",
+            [
+                {
+                    "claim_id": "claim-missing-baseline",
+                    "source_id": "LLM-0001",
+                    "claim_type": "metric",
+                    "predicate": "Accuracy",
+                    "object": "92%",
+                    "value": 92,
+                    "unit": "%",
+                    "baseline": "",
+                    "evidence": "sources/LLM-0001.md#Key Data",
+                    "concepts": [],
+                }
+            ],
+        )
+        run([sys.executable, "scripts/wiki_normalize_metrics.py", str(normalization_vault)])
+        normalized = load_jsonl(normalization_vault / "claims" / "normalized-claims.jsonl")
+        warnings = normalized[0].get("normalization_warnings", [])
+        if "missing_baseline" not in warnings:
+            raise SystemExit("normalization eval did not flag a missing baseline")
 
     print("runtime eval passed")
     return 0

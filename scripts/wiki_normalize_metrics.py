@@ -123,7 +123,10 @@ def normalization_warnings(claim: dict[str, object]) -> list[str]:
         warnings.append("missing_normalized_value")
     if not claim.get("metric_key") or claim.get("metric_key") == "reported numeric claim":
         warnings.append("generic_metric_name")
-    if not claim.get("baseline_key") and str(claim.get("baseline", "")).lower() not in {"", "not applicable"}:
+    baseline = str(claim.get("baseline", "")).strip().lower()
+    if not baseline:
+        warnings.append("missing_baseline")
+    elif not claim.get("baseline_key") and baseline != "not applicable":
         warnings.append("baseline_not_normalized")
     return warnings
 
