@@ -85,6 +85,13 @@ def main() -> int:
     write_file(
         vault / "index.md",
         "# LLM Wiki Index\n\n"
+        "## Pipeline Status\n"
+        "This index is populated as the pipeline creates source and concept pages.\n\n"
+        "| Stage | Current State | Next Action |\n"
+        "| --- | --- | --- |\n"
+        "| Raw evidence | Add PDFs or parsed Markdown under `raw/` | Convert PDFs or inspect `raw/*_markdown/combined.md` |\n"
+        "| Sources | No source pages have been generated yet | Run corpus ingest to create `sources/LLM-NNNN.md` |\n"
+        "| Claims and review | No claims or review queue have been generated yet | Run claim extraction and review gates after sources exist |\n\n"
         "## Sources\n| ID | Title | Tags |\n| --- | --- | --- |\n\n"
         "## Concepts\n| Concept | Key Question | Sources |\n| --- | --- | --- |\n",
         args.force,

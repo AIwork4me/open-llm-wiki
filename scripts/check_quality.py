@@ -265,11 +265,12 @@ def check_setup_python_probe() -> None:
 def check_setup_runtime() -> None:
     python_bin = find_setup_python()
     with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
         result = subprocess.run(
             [
                 python_bin,
                 "scripts/wiki_init.py",
-                str(Path(tmp) / "vault"),
+                str(vault),
                 "--repo-root",
                 str(ROOT),
             ],
@@ -281,6 +282,12 @@ def check_setup_runtime() -> None:
         if result.returncode != 0:
             print(result.stdout)
             fail("setup runtime smoke test failed")
+        index = read(vault / "index.md")
+        required = ["Pipeline Status", "raw/*_markdown/combined.md", "No source pages", "No claims"]
+        missing = [item for item in required if item not in index]
+        if missing:
+            print(index)
+            fail(f"initialized vault index missing pipeline state guidance: {missing}")
 
 
 def check_ingest_corpus_help() -> None:
