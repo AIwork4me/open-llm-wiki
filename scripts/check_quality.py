@@ -185,10 +185,28 @@ def check_setup_script() -> None:
         fail("setup.sh must clean temp directory with trap")
 
 
+def find_setup_python() -> str:
+    for name in ["python3", "python", sys.executable]:
+        path = shutil.which(name) if name != sys.executable else name
+        if not path:
+            continue
+        try:
+            result = subprocess.run(
+                [path, "--version"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0:
+            return path
+    fail("setup runtime smoke test requires a working python3 or python")
+
+
 def check_setup_runtime() -> None:
-    python_bin = shutil.which("python3") or shutil.which("python")
-    if not python_bin:
-        fail("setup runtime smoke test requires python3 or python")
+    python_bin = find_setup_python()
 
     with tempfile.TemporaryDirectory() as tmp:
         result = subprocess.run(
