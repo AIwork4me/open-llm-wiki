@@ -209,6 +209,16 @@ def run_runtime_checks() -> None:
             print(result.stdout)
             fail(f"runtime check failed: {' '.join(command)}")
 
+    science_help = subprocess.run(
+        [sys.executable, "scripts/wiki_science_review.py", "--help"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if "Write qa-reports/science-review" not in science_help.stdout:
+        fail("science review help must document report mode")
+
 
 def check_safety_boundaries() -> None:
     vault = ROOT / "examples" / "minimal-vault"

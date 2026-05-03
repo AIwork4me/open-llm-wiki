@@ -84,7 +84,11 @@ def main() -> int:
     parser.add_argument("vault", type=Path)
     parser.add_argument("--claims", type=Path, help="Defaults to <vault>/claims/claims.jsonl.")
     parser.add_argument("--queue", action="store_true", help="Write _state/science-review-queue.jsonl.")
-    parser.add_argument("--write-report", action="store_true")
+    parser.add_argument(
+        "--write-report",
+        action="store_true",
+        help="Write qa-reports/science-review-YYYY-MM-DD.md, or --report when provided.",
+    )
     parser.add_argument("--report", type=Path, help="Defaults to <vault>/qa-reports/science-review-YYYY-MM-DD.md.")
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--fail-on-review-required", action="store_true")
