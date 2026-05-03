@@ -1,5 +1,11 @@
 # open-llm-wiki
 
+[![GitHub Actions: Validate](https://img.shields.io/github/actions/workflow/status/AIwork4me/open-llm-wiki/validate.yml?branch=main&label=GitHub%20Actions%3A%20Validate)](https://github.com/AIwork4me/open-llm-wiki/actions/workflows/validate.yml)
+
+**GitHub Actions: Validate 已通过（main）。**
+
+[English README](README.md)
+
 **一个面向 Claude Code 的 Skill 套件和轻量 runtime，用来把研究论文变成可审计、可持续增长的 LLM Wiki。**
 
 open-llm-wiki 帮助 Agent 将论文转成 source page，抽取结构化 claim，把多个 source 连接成 concept page，并用独立 QA、矛盾检查、append-only 日志、确定性语义增长工具和可审阅 writeback diff 保持知识库可信。

@@ -1,5 +1,11 @@
 # open-llm-wiki
 
+[![GitHub Actions: Validate](https://img.shields.io/github/actions/workflow/status/AIwork4me/open-llm-wiki/validate.yml?branch=main&label=GitHub%20Actions%3A%20Validate)](https://github.com/AIwork4me/open-llm-wiki/actions/workflows/validate.yml)
+
+**GitHub Actions: Validate passed on main.**
+
+[Chinese README](README.zh.md)
+
 **A Claude Code skill bundle and lightweight runtime for turning research
 papers into an auditable, compounding LLM wiki.**
 
