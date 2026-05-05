@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 
@@ -11,6 +12,29 @@ from wiki_common import write_text
 
 
 DIRS = ["raw", "sources", "concepts", "drafts", "qa-reports", "claims", "templates", "_state", "log-archive"]
+OBSIDIAN_GRAPH_SEARCH = "-path:raw -path:templates -path:qa-reports -path:_state -path:claims -path:drafts -path:log-archive"
+OBSIDIAN_GRAPH_SETTINGS = {
+    "collapse-filter": False,
+    "search": OBSIDIAN_GRAPH_SEARCH,
+    "showTags": False,
+    "showAttachments": False,
+    "hideUnresolved": True,
+    "showOrphans": True,
+    "collapse-color-groups": True,
+    "colorGroups": [],
+    "collapse-display": True,
+    "showArrow": False,
+    "textFadeMultiplier": 0,
+    "nodeSizeMultiplier": 1,
+    "lineSizeMultiplier": 1,
+    "collapse-forces": True,
+    "centerStrength": 0.518713248970312,
+    "repelStrength": 10,
+    "linkStrength": 1,
+    "linkDistance": 250,
+    "scale": 1,
+    "close": False,
+}
 RUNTIME_SCRIPTS = [
     "pdf_corpus_report.py",
     "pdf_corpus_to_markdown.py",
@@ -76,6 +100,7 @@ def main() -> int:
 
     copy_file(repo / "SCHEMA.md", vault / "SCHEMA.md", args.force)
     copy_tree_contents(repo / "templates", vault / "templates", args.force)
+    write_file(vault / ".obsidian" / "graph.json", json.dumps(OBSIDIAN_GRAPH_SETTINGS, indent=2) + "\n", args.force)
 
     write_file(vault / "_state" / "id-counter.md", "# ID Counter\nnext: 1\n", args.force)
     write_file(vault / "_state" / "growth-queue.jsonl", "", args.force)

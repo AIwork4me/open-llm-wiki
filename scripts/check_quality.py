@@ -180,6 +180,40 @@ def check_minimal_vault() -> None:
             fail(f"minimal vault index missing {link}")
 
 
+def check_vault_init_obsidian_graph_filter() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("vault initialization failed while checking Obsidian graph defaults")
+        graph = vault / ".obsidian" / "graph.json"
+        if not graph.exists():
+            print(result.stdout)
+            fail("initialized vault missing .obsidian/graph.json")
+        try:
+            settings = json.loads(read(graph))
+        except json.JSONDecodeError as exc:
+            print(read(graph))
+            fail(f".obsidian/graph.json is not valid JSON: {exc}")
+        search = str(settings.get("search", ""))
+        for token in ["-path:raw", "-path:templates", "-path:qa-reports", "-path:_state", "-path:claims"]:
+            if token not in search:
+                print(search)
+                fail(f"Obsidian graph filter missing {token}")
+        if settings.get("hideUnresolved") is not True:
+            fail("Obsidian graph defaults must hide unresolved placeholder nodes")
+        for folder in ["raw", "templates", "qa-reports", "_state", "claims"]:
+            if not (vault / folder).is_dir():
+                fail(f"vault initialization removed required directory: {folder}")
+
+
 def check_claim_extraction() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "minimal-vault"
@@ -1335,6 +1369,7 @@ def main() -> None:
     check_skills()
     check_docs()
     check_minimal_vault()
+    check_vault_init_obsidian_graph_filter()
     check_claim_extraction()
     check_semantic_qa_qualitative_metric_placeholder()
     check_setup_script()
