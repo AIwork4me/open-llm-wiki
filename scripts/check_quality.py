@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -484,6 +485,91 @@ def expect_command_failure(command: list[str], expected: str, message: str, cwd:
         print(result.stdout)
         fail(f"{message}; missing expected text {expected!r}")
     return result.stdout
+
+
+def check_pdf_corpus_to_markdown_progress_log() -> None:
+    class SlowSuccessHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            time.sleep(2)
+            body = {
+                "result": {
+                    "layoutParsingResults": [
+                        {"markdown": {"text": "# Slow Test\n\nConverted.", "images": {}}, "outputImages": {}}
+                    ]
+                }
+            }
+            data = json.dumps(body).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args: object) -> None:
+            return
+
+    server = HTTPServer(("127.0.0.1", 0), SlowSuccessHandler)
+    server.timeout = 10
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_dir = root / "pdfs"
+            output_root = root / "raw"
+            input_dir.mkdir()
+            (input_dir / "paper.pdf").write_bytes(b"%PDF-1.4 fake")
+            log_path = root / "progress.tsv"
+            env = os.environ.copy()
+            env["OPEN_LLM_WIKI_LAYOUT_TOKEN"] = "fake"
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "scripts/pdf_corpus_to_markdown.py",
+                    str(input_dir),
+                    "--output-root",
+                    str(output_root),
+                    "--api-url",
+                    f"http://127.0.0.1:{server.server_address[1]}/layout",
+                    "--retries",
+                    "0",
+                    "--timeout",
+                    "10",
+                    "--no-download-images",
+                    "--log",
+                    str(log_path),
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            deadline = time.time() + 1.0
+            during = ""
+            while time.time() < deadline:
+                if log_path.exists():
+                    during = log_path.read_text(encoding="utf-8")
+                    if "\tSTART\t" in during:
+                        break
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+            output, _ = proc.communicate(timeout=20)
+            final = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+            if "\tSTART\t" not in during:
+                print(output)
+                print(final)
+                fail("corpus converter did not write an in-flight START progress row")
+            if proc.returncode != 0:
+                print(output)
+                fail("corpus converter progress test failed")
+            if "\tOK\t" not in final:
+                print(final)
+                fail("corpus converter did not preserve the final OK audit row")
+    finally:
+        thread.join(timeout=5)
+        server.server_close()
 
 
 def check_safety_boundaries() -> None:
@@ -1093,6 +1179,7 @@ def main() -> None:
     check_pdf_to_markdown_help()
     run_runtime_checks()
     check_pdf_to_markdown_http_errors()
+    check_pdf_corpus_to_markdown_progress_log()
     check_safety_boundaries()
     check_pdf_corpus_report_short_outputs()
     check_pdf_corpus_report_parser_warnings()
