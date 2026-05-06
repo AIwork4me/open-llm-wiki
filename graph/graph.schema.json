@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AIwork4me/open-llm-wiki/graph.schema.json",
+  "title": "open-llm-wiki Knowledge Graph",
+  "type": "object",
+  "required": ["version", "kind", "nodes", "edges"],
+  "properties": {
+    "version": {"type": "string"},
+    "kind": {"const": "llm-wiki-graph"},
+    "vault": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "focus": {
+      "type": ["object", "null"],
+      "properties": {
+        "node_id": {"type": "string"},
+        "depth": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    },
+    "nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/node"}
+    },
+    "edges": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/edge"}
+    },
+    "layers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/layer"}
+    },
+    "evidence_paths": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence_path"}
+    },
+    "issues": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/issue"}
+    },
+    "counts": {"type": "object"}
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "type", "label"],
+      "properties": {
+        "id": {"type": "string"},
+        "type": {
+          "enum": [
+            "source",
+            "draft",
+            "concept",
+            "claim",
+            "metric",
+            "qa-report",
+            "contradiction",
+            "science-review",
+            "raw",
+            "queue-task"
+          ]
+        },
+        "label": {"type": "string"},
+        "path": {"type": "string"},
+        "summary": {"type": "string"},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "status": {"type": "string"},
+        "metadata": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "edge": {
+      "type": "object",
+      "required": ["id", "source", "target", "type"],
+      "properties": {
+        "id": {"type": "string"},
+        "source": {"type": "string"},
+        "target": {"type": "string"},
+        "type": {
+          "enum": [
+            "cites",
+            "derived-from",
+            "supports",
+            "contradicts",
+            "needs-review",
+            "reviewed-by",
+            "updates",
+            "related-to"
+          ]
+        },
+        "label": {"type": "string"},
+        "weight": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence": {"type": "string"},
+        "metadata": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "layer": {
+      "type": "object",
+      "required": ["id", "label", "node_ids"],
+      "properties": {
+        "id": {"type": "string"},
+        "label": {"type": "string"},
+        "node_ids": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": true
+    },
+    "evidence_path": {
+      "type": "object",
+      "required": ["concept", "claim", "source", "evidence"],
+      "properties": {
+        "concept": {"type": "string"},
+        "claim": {"type": "string"},
+        "source": {"type": "string"},
+        "evidence": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "issue": {
+      "type": "object",
+      "required": ["priority", "path", "message"],
+      "properties": {
+        "priority": {"enum": ["P0", "P1", "P2", "P3"]},
+        "path": {"type": "string"},
+        "message": {"type": "string"},
+        "fix": {"type": "string"}
+      },
+      "additionalProperties": true
+    }
+  }
+}

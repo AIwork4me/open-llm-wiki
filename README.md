@@ -85,6 +85,7 @@ The skills coordinate judgment. The runtime scripts handle repeatable checks:
 | `scripts/wiki_grow.py` | orchestrate discovery, claims, normalization, QA, review, contradictions, revision, and lint |
 | `scripts/wiki_lint.py` | verify structure, QA gates, links, index, logs, and stale claims |
 | `scripts/wiki_search.py` | local markdown search across source and concept pages |
+| `scripts/wiki_graph_export.py` | export a read-only source/claim/concept/QA graph as JSON or Obsidian Canvas |
 | `scripts/wiki_writeback.py` | generate or apply reviewable query-writeback diffs |
 | `scripts/wiki_eval.py` | smoke-test the runtime against the example vault |
 
@@ -127,6 +128,22 @@ uv run python scripts/wiki_lint.py my-llm-wiki --obsidian --fail-on p1
 Profiles are `minimal`, `research`, and `full`. Re-runs merge JSON settings and
 community plugin lists without overwriting existing user keys. Use
 `--skip-downloads` when plugin/theme files will be installed manually.
+
+Optional knowledge graph layer:
+
+```bash
+uv run python scripts/wiki_graph_export.py my-llm-wiki --format json
+uv run python scripts/wiki_graph_export.py my-llm-wiki \
+  --format obsidian-canvas --output canvas/wiki-graph.canvas
+uv run python scripts/wiki_graph_export.py my-llm-wiki \
+  --focus concepts/attention-mechanisms.md --depth 2
+uv run python scripts/wiki_lint.py my-llm-wiki --graph --fail-on p1
+```
+
+The graph is a read-only explanation layer. It links source, concept, claim,
+QA, contradiction, review, queue, and raw-evidence nodes so users can inspect
+paths such as `concept -> claim -> source -> evidence anchor`. It does not
+replace Markdown pages, QA reports, science review, or query writeback approval.
 
 Then add a paper:
 
@@ -195,6 +212,8 @@ writeback still run through the open-llm-wiki gates.
 - PDF-to-Markdown conversion sends document bytes to the configured layout
   parsing API. Use it only for documents the user is allowed to process.
 - QA reports and contradiction reports are append-only audit records.
+- Graph exports are read-only derived views; they do not replace evidence
+  anchors, science review, contradiction checks, or writeback approval.
 - Semantic self-growth writes a claim graph under `claims/`, source/discovery
   and queue state under `_state/`, QA/review reports under `qa-reports/`, and
   concept revisions only when explicitly applied.
@@ -205,6 +224,7 @@ writeback still run through the open-llm-wiki gates.
 open-llm-wiki/
 |-- setup.sh
 |-- SCHEMA.md
+|-- graph/
 |-- obsidian/
 |-- skills/
 |   |-- wiki-ingest/
@@ -230,7 +250,9 @@ uv run python -m skills_ref.cli validate skills/query-writeback
 uv run python -m skills_ref.cli validate skills/wiki-lint
 uv run python scripts/check_quality.py
 uv run python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+uv run python scripts/wiki_lint.py examples/minimal-vault --graph --fail-on p1
 uv run python scripts/wiki_obsidian_setup.py examples/minimal-vault --dry-run --skip-downloads
+uv run python scripts/wiki_graph_export.py examples/minimal-vault --format json
 uv run python scripts/wiki_eval.py
 bash -n setup.sh
 ```

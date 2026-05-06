@@ -326,7 +326,31 @@ def check_obsidian(vault: Path, findings: list[Finding]) -> None:
                 )
 
 
-def lint(vault: Path, obsidian: bool = False) -> list[Finding]:
+def check_graph(vault: Path, findings: list[Finding]) -> None:
+    try:
+        from wiki_graph_export import graph_findings
+    except ImportError as exc:
+        findings.append(
+            Finding(
+                "P1",
+                "scripts/wiki_graph_export.py",
+                f"graph export runtime is unavailable: {exc}",
+                "copy wiki_graph_export.py into the vault runtime",
+            )
+        )
+        return
+    for issue in graph_findings(vault):
+        findings.append(
+            Finding(
+                str(issue.get("priority", "P2")),
+                str(issue.get("path", ".graph")),
+                str(issue.get("message", "graph issue")),
+                str(issue.get("fix", "")),
+            )
+        )
+
+
+def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     check_structure(vault, findings)
     check_pages(vault, findings)
@@ -339,6 +363,8 @@ def lint(vault: Path, obsidian: bool = False) -> list[Finding]:
     check_state_jsonl(vault, findings)
     if obsidian:
         check_obsidian(vault, findings)
+    if graph:
+        check_graph(vault, findings)
     return findings
 
 
@@ -362,10 +388,15 @@ def main() -> int:
         action="store_true",
         help="Also check optional Obsidian settings, plugin list, sortspec, inbox, and diagram references.",
     )
+    parser.add_argument(
+        "--graph",
+        action="store_true",
+        help="Also build the optional read-only knowledge graph and check evidence path connectivity.",
+    )
     args = parser.parse_args()
 
     vault = args.vault.resolve()
-    findings = lint(vault, obsidian=args.obsidian)
+    findings = lint(vault, obsidian=args.obsidian, graph=args.graph)
 
     if args.format == "json":
         print(json_dump({"vault": str(vault), "findings": [item.as_dict() for item in findings]}))

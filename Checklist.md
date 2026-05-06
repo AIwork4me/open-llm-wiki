@@ -66,6 +66,11 @@ uv sync --dev --locked
       `.obsidian/community-plugins.json`, `raw/inbox/`, and `sortspec.md`.
 - [ ] `uv run python scripts/wiki_lint.py <new-vault> --obsidian --fail-on p1`
       reports Obsidian status without P0/P1 findings.
+- [ ] `uv run python scripts/wiki_graph_export.py <new-vault> --format json`
+      writes `.graph/graph.json`, `.graph/graph.schema.json`, and
+      `.graph/graph-report.md` without editing wiki content.
+- [ ] `uv run python scripts/wiki_lint.py <new-vault> --graph --fail-on p1`
+      reports graph connectivity without P0/P1 findings.
 - [ ] Re-running initialization without `--force` does not overwrite existing
       user-edited files.
 - [ ] Re-running initialization with `--force` overwrites only intended runtime
@@ -384,9 +389,19 @@ uv sync --dev --locked
 - [ ] Concept revision updates concept matrices without inserting unapproved
       high-risk claims.
 - [ ] Final lint passes with `--fail-on p1`.
+- [ ] Graph export contains source, concept, claim/metric, QA, contradiction,
+      review, queue, and raw-evidence nodes when those artifacts exist.
+- [ ] A concept page can be traced through graph evidence paths to claim,
+      source, evidence anchor, and raw/parsed evidence when available.
+- [ ] Focused graph export with `--focus <source-or-concept> --depth 2`
+      includes the selected node and its local neighborhood.
+- [ ] Obsidian Canvas export writes `canvas/wiki-graph.canvas` with file nodes
+      linking back to Markdown pages.
 - [ ] The generated vault can be opened in Obsidian with usable backlinks.
 - [ ] Optional Obsidian profile does not replace source QA, claim graph,
       semantic QA, contradiction scan, or query writeback approval gates.
+- [ ] Optional graph export does not replace source QA, evidence anchors,
+      science review, contradiction scan, or query writeback approval gates.
 
 ## 20. Documentation And User Experience
 
@@ -406,6 +421,8 @@ uv sync --dev --locked
       reports are preferred.
 - [ ] Documentation explains how to enable the optional Obsidian profile and how
       to run `wiki_lint.py --obsidian`.
+- [ ] Documentation explains how to export the optional graph layer and how to
+      run `wiki_lint.py --graph`.
 
 ## 21. GitHub And Release Readiness
 

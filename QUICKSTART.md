@@ -233,6 +233,20 @@ To add Obsidian settings to an existing vault:
 python my-llm-wiki/.open-llm-wiki/scripts/wiki_obsidian_setup.py my-llm-wiki --profile minimal
 ```
 
+## Export a Knowledge Graph
+
+The graph export is read-only. It creates derived files under `.graph/` or
+`canvas/` and never rewrites source, concept, claim, or QA pages.
+
+```bash
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_graph_export.py my-llm-wiki --format json
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_graph_export.py my-llm-wiki \
+  --focus concepts/attention-mechanisms.md --depth 2
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_graph_export.py my-llm-wiki \
+  --format obsidian-canvas --output canvas/wiki-graph.canvas
+python my-llm-wiki/.open-llm-wiki/scripts/wiki_lint.py my-llm-wiki --graph --fail-on p1
+```
+
 ## Propose a Writeback Diff
 
 For long-lived team knowledge bases, preserve useful answers through reviewable
@@ -258,7 +272,9 @@ uv run python -m skills_ref.cli validate skills/query-writeback
 uv run python -m skills_ref.cli validate skills/wiki-lint
 uv run python scripts/check_quality.py
 uv run python scripts/wiki_lint.py examples/minimal-vault --fail-on p1
+uv run python scripts/wiki_lint.py examples/minimal-vault --graph --fail-on p1
 uv run python scripts/wiki_obsidian_setup.py examples/minimal-vault --dry-run --skip-downloads
+uv run python scripts/wiki_graph_export.py examples/minimal-vault --format json
 uv run python scripts/wiki_eval.py
 bash -n setup.sh
 ```

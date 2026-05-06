@@ -43,6 +43,7 @@ RUNTIME_SCRIPTS = [
     "wiki_concept_revision.py",
     "wiki_contradictions.py",
     "wiki_discover_sources.py",
+    "wiki_graph_export.py",
     "wiki_grow.py",
     "wiki_ingest_corpus.py",
     "wiki_normalize_metrics.py",
@@ -55,7 +56,7 @@ RUNTIME_SCRIPTS = [
     "wiki_search.py",
     "wiki_writeback.py",
 ]
-RUNTIME_RESOURCE_DIRS = ["obsidian"]
+RUNTIME_RESOURCE_DIRS = ["obsidian", "graph"]
 
 
 def copy_file(src: Path, dst: Path, force: bool) -> None:
