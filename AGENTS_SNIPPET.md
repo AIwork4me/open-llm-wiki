@@ -19,6 +19,8 @@ Optional rules to paste into a wiki vault's `AGENTS.md`.
   evidence without ingest, QA, and registry updates.
 - Diagrams under `canvas/` or `assets/excalidraw/` are explanatory aids, not
   evidence sources.
+- Graph files under `.graph/` or `canvas/wiki-graph.canvas` are derived views;
+  do not treat them as evidence or use them to bypass QA/review gates.
 - Merge `.obsidian/*.json` changes and preserve user keys when editing
   Obsidian settings.
 - Query writeback is read-only by default; ask before writing unless the user
@@ -28,6 +30,8 @@ Optional rules to paste into a wiki vault's `AGENTS.md`.
   `.open-llm-wiki/scripts/wiki_search.py` when they are available.
 - Use `.open-llm-wiki/scripts/wiki_obsidian_setup.py` for optional Obsidian
   setup instead of hand-editing plugin lists.
+- Use `.open-llm-wiki/scripts/wiki_graph_export.py` for optional graph exports
+  and `.open-llm-wiki/scripts/wiki_lint.py --graph` for evidence-path checks.
 - Generate writeback diffs with `.open-llm-wiki/scripts/wiki_writeback.py`
   before applying them.
 - Log every write in `log.md` using:

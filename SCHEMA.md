@@ -8,6 +8,7 @@ Agents should read it before editing a wiki vault.
 ```text
 my-llm-wiki/
 |-- .open-llm-wiki/ # runtime scripts copied by setup/init
+|-- .graph/          # optional derived graph JSON/report/schema
 |-- .obsidian/       # optional Obsidian settings when enabled
 |-- raw/             # original source files and parsed text
 |   `-- inbox/       # optional unprocessed material drop zone
@@ -280,6 +281,30 @@ Rules:
 - Obsidian plugins must not bypass QA gates, science review, contradiction
   checks, or query writeback approval.
 
+## Optional Knowledge Graph Layer
+
+The knowledge graph is a derived, read-only explanation layer. It may write
+`graph.json`, `graph.schema.json`, and `graph-report.md` under `.graph/`, or an
+Obsidian Canvas view under `canvas/`. It must not rewrite `sources/`,
+`concepts/`, `claims/`, `qa-reports/`, `_state/`, or `raw/`.
+
+Supported node types include `source`, `draft`, `concept`, `claim`, `metric`,
+`qa-report`, `contradiction`, `science-review`, `raw`, and `queue-task`.
+Supported edge types include `cites`, `derived-from`, `supports`,
+`contradicts`, `needs-review`, `reviewed-by`, `updates`, and `related-to`.
+
+Rules:
+
+- graph nodes and Canvas nodes are not evidence sources.
+- every durable concept conclusion still needs source or claim citations.
+- useful evidence paths should resolve as
+  `concept -> claim -> source -> evidence anchor`.
+- focused graphs may hide unrelated context but must not change underlying
+  Markdown or JSONL data.
+- graph export must stay local and must not upload raw files or paper text.
+- `wiki_lint.py --graph` reports broken evidence paths or isolated source and
+  concept nodes; it does not apply fixes.
+
 ## Runtime Commands
 
 The vault may contain runtime scripts at `.open-llm-wiki/scripts/`:
@@ -300,7 +325,10 @@ python .open-llm-wiki/scripts/wiki_concept_revision.py . --apply
 python .open-llm-wiki/scripts/wiki_grow.py . --discover-sources --plan-queue --queue-cadence weekly --science-review --apply-concept-revision
 python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
 python .open-llm-wiki/scripts/wiki_lint.py . --obsidian --fail-on p1
+python .open-llm-wiki/scripts/wiki_lint.py . --graph --fail-on p1
 python .open-llm-wiki/scripts/wiki_search.py . "query terms"
 python .open-llm-wiki/scripts/wiki_obsidian_setup.py . --profile minimal --skip-downloads
+python .open-llm-wiki/scripts/wiki_graph_export.py . --format json
+python .open-llm-wiki/scripts/wiki_graph_export.py . --format obsidian-canvas --output canvas/wiki-graph.canvas
 python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."
 ```

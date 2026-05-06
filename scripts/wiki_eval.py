@@ -115,6 +115,30 @@ def main() -> int:
         raise SystemExit("writeback eval did not produce a reviewable proposal")
 
     with tempfile.TemporaryDirectory() as tmp:
+        graph_vault = Path(tmp) / "graph-vault"
+        shutil.copytree(vault, graph_vault)
+        run([sys.executable, "scripts/wiki_graph_export.py", str(graph_vault), "--format", "json"])
+        graph_path = graph_vault / ".graph" / "graph.json"
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        node_types = {node.get("type") for node in graph.get("nodes", [])}
+        if not {"source", "concept", "claim", "metric", "qa-report"}.issubset(node_types):
+            raise SystemExit("graph eval missing expected source/concept/claim/QA nodes")
+        if not graph.get("evidence_paths"):
+            raise SystemExit("graph eval did not produce evidence paths")
+        run(
+            [
+                sys.executable,
+                "scripts/wiki_graph_export.py",
+                str(graph_vault),
+                "--format",
+                "obsidian-canvas",
+                "--output",
+                "canvas/wiki-graph.canvas",
+            ]
+        )
+        run([sys.executable, "scripts/wiki_lint.py", str(graph_vault), "--graph", "--fail-on", "p1"])
+
+    with tempfile.TemporaryDirectory() as tmp:
         check_individual_pipeline_stages(vault, tmp)
 
         growth_vault = Path(tmp) / "growth-vault"

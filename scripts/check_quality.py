@@ -112,6 +112,7 @@ def check_docs() -> None:
         "scripts/wiki_concept_revision.py",
         "scripts/wiki_contradictions.py",
         "scripts/wiki_discover_sources.py",
+        "scripts/wiki_graph_export.py",
         "scripts/wiki_grow.py",
         "scripts/wiki_ingest_corpus.py",
         "scripts/wiki_normalize_metrics.py",
@@ -133,6 +134,7 @@ def check_docs() -> None:
         "obsidian/hotkeys.json",
         "obsidian/plugin-manifest.json",
         "obsidian/sortspec.md",
+        "graph/graph.schema.json",
     ]
     for item in required:
         if not (ROOT / item).exists():
@@ -318,6 +320,144 @@ def check_obsidian_setup_layer() -> None:
         rerun_plugins = json.loads(read(vault / ".obsidian" / "community-plugins.json"))
         if len(rerun_plugins) != len(set(rerun_plugins)):
             fail("Obsidian setup rerun duplicated plugin ids")
+
+
+def check_graph_export_layer() -> None:
+    try:
+        json.loads(read(ROOT / "graph" / "graph.schema.json"))
+    except json.JSONDecodeError as exc:
+        fail(f"graph/graph.schema.json is not valid JSON: {exc}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        initialized = Path(tmp) / "initialized-vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(initialized), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("fresh vault initialization failed while checking graph runtime copy")
+        for item in [".open-llm-wiki/scripts/wiki_graph_export.py", ".open-llm-wiki/graph/graph.schema.json"]:
+            if not (initialized / item).exists():
+                fail(f"fresh vault did not copy graph runtime resource: {item}")
+
+        vault = Path(tmp) / "minimal-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", vault)
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_graph_export.py", str(vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("graph JSON export failed")
+        graph_path = vault / ".graph" / "graph.json"
+        schema_path = vault / ".graph" / "graph.schema.json"
+        report_path = vault / ".graph" / "graph-report.md"
+        for path in [graph_path, schema_path, report_path]:
+            if not path.exists():
+                print(result.stdout)
+                fail(f"graph export missing {path.relative_to(vault)}")
+        graph = json.loads(read(graph_path))
+        node_types = {node.get("type") for node in graph.get("nodes", [])}
+        for node_type in ["source", "concept", "claim", "metric", "qa-report", "contradiction"]:
+            if node_type not in node_types:
+                print(json.dumps(graph.get("nodes", []), indent=2)[:3000])
+                fail(f"graph export missing {node_type} node")
+        edge_types = {edge.get("type") for edge in graph.get("edges", [])}
+        for edge_type in ["cites", "supports", "reviewed-by", "derived-from", "needs-review"]:
+            if edge_type not in edge_types:
+                print(json.dumps(graph.get("edges", []), indent=2)[:3000])
+                fail(f"graph export missing {edge_type} edge")
+        if not graph.get("evidence_paths"):
+            fail("graph export did not produce concept -> claim -> source evidence paths")
+
+        focus_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_graph_export.py",
+                str(vault),
+                "--format",
+                "json",
+                "--focus",
+                "concepts/attention-mechanisms.md",
+                "--depth",
+                "1",
+                "--output",
+                ".graph/focus-attention.json",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if focus_result.returncode != 0:
+            print(focus_result.stdout)
+            fail("focused graph export failed")
+        focus_graph = json.loads(read(vault / ".graph" / "focus-attention.json"))
+        if focus_graph.get("focus", {}).get("node_id") != "concept:attention-mechanisms":
+            print(json.dumps(focus_graph.get("focus"), indent=2))
+            fail("focused graph export did not resolve the concept page")
+
+        canvas_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_graph_export.py",
+                str(vault),
+                "--format",
+                "obsidian-canvas",
+                "--output",
+                "canvas/wiki-graph.canvas",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if canvas_result.returncode != 0:
+            print(canvas_result.stdout)
+            fail("Obsidian Canvas graph export failed")
+        canvas = json.loads(read(vault / "canvas" / "wiki-graph.canvas"))
+        if not canvas.get("nodes") or not canvas.get("edges"):
+            fail("Obsidian Canvas export did not contain nodes and edges")
+
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--graph", "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if lint_result.returncode != 0:
+            print(lint_result.stdout)
+            fail("wiki_lint.py --graph produced P0/P1 findings for the minimal vault")
+
+        outside = Path(tmp) / "outside.json"
+        unsafe = subprocess.run(
+            [
+                sys.executable,
+                "scripts/wiki_graph_export.py",
+                str(vault),
+                "--format",
+                "json",
+                "--output",
+                str(outside),
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if unsafe.returncode == 0:
+            fail("graph export accepted an output path outside the vault")
+        if "graph output must stay inside the vault" not in unsafe.stdout:
+            print(unsafe.stdout)
+            fail("graph export outside-vault failure did not explain the boundary")
 
 
 def check_claim_extraction() -> None:
@@ -545,6 +685,7 @@ def run_runtime_checks() -> None:
         [sys.executable, "scripts/wiki_concept_revision.py", "--help"],
         [sys.executable, "scripts/wiki_contradictions.py", "--help"],
         [sys.executable, "scripts/wiki_discover_sources.py", "--help"],
+        [sys.executable, "scripts/wiki_graph_export.py", "--help"],
         [sys.executable, "scripts/wiki_grow.py", "--help"],
         [sys.executable, "scripts/wiki_ingest_corpus.py", "--help"],
         [sys.executable, "scripts/wiki_normalize_metrics.py", "--help"],
@@ -1478,6 +1619,7 @@ def main() -> None:
     check_minimal_vault()
     check_vault_init_obsidian_graph_filter()
     check_obsidian_setup_layer()
+    check_graph_export_layer()
     check_claim_extraction()
     check_semantic_qa_qualitative_metric_placeholder()
     check_setup_script()
