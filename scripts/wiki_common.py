@@ -14,6 +14,22 @@ SOURCE_ID_RE = re.compile(r"\bLLM-\d{4}\b")
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]")
 LOG_RE = re.compile(r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\] [a-z-]+ \| .+ \| .+ \| .+$")
 
+# Parse artifact contract constants (Issue #68).
+MANIFEST_REQUIRED_FIELDS = frozenset({
+    "source_path", "source_sha256", "artifact_sha256", "combined",
+    "parser", "parser_version", "created_at", "source_mtime",
+    "mime", "page_count", "anchors", "limitations",
+})
+CHUNK_REQUIRED_FIELDS = frozenset({
+    "chunk_id", "source_uuid", "source_id", "artifact_path",
+    "heading_path", "page", "line_start", "line_end",
+    "char_start", "char_end", "kind", "text_hash", "token_count",
+})
+MANIFEST_ANCHOR_FIELDS = frozenset({
+    "pages", "lines", "tables", "figures", "equations",
+})
+LEGACY_PARSER = "legacy"
+
 
 @dataclass
 class Finding:
@@ -144,3 +160,62 @@ def markdown_findings(findings: list[Finding]) -> str:
 
 def json_dump(data: object) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+def file_sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def load_manifest(artifact_dir: Path) -> dict[str, object] | None:
+    manifest_path = artifact_dir / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        data = json.loads(read_text(manifest_path))
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def is_manifest_complete(manifest: dict[str, object] | None) -> bool:
+    if manifest is None:
+        return False
+    return MANIFEST_REQUIRED_FIELDS.issubset(set(manifest))
+
+
+def is_legacy_manifest(manifest: dict[str, object] | None) -> bool:
+    if manifest is None:
+        return False
+    return not MANIFEST_REQUIRED_FIELDS.issubset(set(manifest))
+
+
+def is_stale_manifest(manifest: dict[str, object], source_path: Path) -> bool:
+    recorded = str(manifest.get("source_sha256", ""))
+    if not recorded:
+        return True
+    if not source_path.exists():
+        return False
+    return file_sha256(source_path) != recorded
+
+
+def load_chunks(artifact_dir: Path) -> list[dict[str, object]]:
+    chunks_path = artifact_dir / "chunks.jsonl"
+    if not chunks_path.exists():
+        return []
+    chunks: list[dict[str, object]] = []
+    for line in read_text(chunks_path).splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            chunks.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return chunks

@@ -45,6 +45,113 @@ my-llm-wiki/
 | claim graph | `claims/` | normalized durable claims extracted from stable source pages |
 | raw | `raw/` | immutable evidence and parsed text |
 
+## Parse Artifact Contract
+
+Each `raw/<source>_markdown/` directory is a **parse artifact** — a verifiable,
+traceable, reusable output of a parser. The contract defines required files and
+fields so downstream tools (ingest, claims, QA, lint) can trust artifact state.
+
+### Required Files
+
+| File | Status | Purpose |
+| --- | --- | --- |
+| `combined.md` | required | full parsed text, page-separated by `---` |
+| `manifest.json` | required | artifact metadata and provenance |
+| `chunks.jsonl` | required | structured evidence anchors (line, page, heading) |
+| `tables.jsonl` | optional | extracted table structures |
+| `figures.jsonl` | optional | figure/metadata entries |
+| `assets/` | optional | images, table screenshots, attachments |
+| `parse.log` | optional | parser stdout/stderr summary |
+
+### `manifest.json` Fields
+
+Required fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `source_path` | string | vault-relative path to the original source file |
+| `source_sha256` | string | SHA-256 of the source file at parse time |
+| `artifact_sha256` | string | SHA-256 of `combined.md` |
+| `combined` | string | filename of combined markdown (usually `combined.md`) |
+| `parser` | string | parser identifier (`pdf_to_markdown`, `desktop-text-stager`, `manual`) |
+| `parser_version` | string | parser version string |
+| `created_at` | ISO 8601 | timestamp when the artifact was created |
+| `source_mtime` | ISO 8601 | source file modification time at parse time |
+| `mime` | string | MIME type of the source (e.g. `application/pdf`) |
+| `page_count` | integer | number of pages or top-level sections parsed |
+| `anchors` | object | which anchor types are preserved (see below) |
+| `limitations` | array of strings | known parse limitations |
+
+`anchors` sub-object fields (all boolean):
+
+| Field | Meaning |
+| --- | --- |
+| `pages` | page boundaries are preserved |
+| `lines` | line numbers are accurate |
+| `tables` | tables were extracted (may be flattened) |
+| `figures` | figures/images were extracted |
+| `equations` | equations were preserved |
+
+Additional fields from previous versions (e.g. `input`, `api_url`, `attempts`,
+`documents`, `download_images`, `warnings`) are preserved for backward
+compatibility but are not part of the contract.
+
+### `chunks.jsonl` Fields
+
+Each line is a JSON object. Required fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `chunk_id` | string | unique identifier, typically `<source_uuid>:<index>` |
+| `source_uuid` | string | hash-derived UUID for the source file |
+| `source_id` | string | wiki source ID (`LLM-NNNN`) or empty string if unassigned |
+| `artifact_path` | string | relative path to `combined.md` within the artifact dir |
+| `heading_path` | array of strings | heading hierarchy leading to this chunk |
+| `page` | integer | page number (0 if unknown) |
+| `line_start` | integer | 1-based start line in `combined.md` |
+| `line_end` | integer | 1-based end line in `combined.md` |
+| `char_start` | integer | 0-based start character offset |
+| `char_end` | integer | 0-based end character offset |
+| `kind` | string | chunk type: `paragraph`, `table`, `figure_caption`, `equation`, `code` |
+| `text_hash` | string | SHA-256 hash of chunk text (truncated) |
+| `token_count` | integer | estimated token count |
+
+### Artifact Status
+
+Downstream tools classify each artifact as:
+
+| Status | Meaning |
+| --- | --- |
+| `complete` | manifest has all required fields, hashes are valid |
+| `stale` | manifest is complete but `source_sha256` no longer matches the source file |
+| `legacy` | manifest is missing or incomplete; treated as degraded |
+
+### Legacy Compatibility
+
+Artifacts created before this contract may have a partial `manifest.json` or none
+at all. Downstream tools handle these cases:
+
+- `wiki_lint.py` reports legacy artifacts as **P2** (advisory, not blocking).
+- `wiki_ingest_corpus.py` marks legacy items with `artifact_status: legacy` and
+  records limitations in the source page.
+- `wiki_claims.py` annotates claims from legacy artifacts with
+  `evidence_status: legacy`.
+- `wiki_semantic_qa.py` emits a **P2** finding for evidence pointing to a legacy
+  artifact.
+
+Legacy artifacts are never treated as complete or trustworthy. They remain usable
+for read-only evidence but should be re-parsed when possible.
+
+### Desktop-Readable Fields
+
+The following manifest fields are designed for desktop/UI consumption:
+
+- `parser` and `parser_version`: show which parser produced this artifact.
+- `anchors`: coverage indicator for pages, lines, tables, figures, equations.
+- `limitations`: human-readable list of what was not extracted.
+- `page_count`: quick quality indicator.
+- `created_at` and `source_mtime`: freshness comparison.
+
 ## Source Frontmatter
 
 ```yaml

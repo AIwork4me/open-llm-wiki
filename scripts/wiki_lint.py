@@ -11,12 +11,19 @@ from datetime import date, datetime
 from pathlib import Path
 
 from wiki_common import (
+    CHUNK_REQUIRED_FIELDS,
+    MANIFEST_ANCHOR_FIELDS,
+    MANIFEST_REQUIRED_FIELDS,
     Finding,
     LOG_RE,
     SOURCE_ID_RE,
     WIKILINK_RE,
     existing_targets,
+    file_sha256,
+    is_manifest_complete,
     json_dump,
+    load_chunks,
+    load_manifest,
     load_pages,
     markdown_findings,
     parse_frontmatter,
@@ -352,6 +359,104 @@ def check_graph(vault: Path, findings: list[Finding]) -> None:
         )
 
 
+def check_artifacts(vault: Path, findings: list[Finding]) -> None:
+    raw_dir = vault / "raw"
+    if not raw_dir.is_dir():
+        return
+    for artifact_dir in sorted(raw_dir.glob("*_markdown")):
+        if not artifact_dir.is_dir():
+            continue
+        artifact_rel = rel(artifact_dir, vault)
+        combined = artifact_dir / "combined.md"
+        manifest = load_manifest(artifact_dir)
+
+        if not combined.exists():
+            findings.append(Finding("P1", artifact_rel, "artifact directory missing combined.md"))
+            continue
+
+        if manifest is None:
+            findings.append(Finding("P2", f"{artifact_rel}/manifest.json", "no manifest.json; treated as legacy artifact"))
+            continue
+
+        # Validate manifest required fields.
+        missing_fields = sorted(MANIFEST_REQUIRED_FIELDS - set(manifest))
+        if missing_fields:
+            findings.append(Finding(
+                "P1",
+                f"{artifact_rel}/manifest.json",
+                f"manifest missing required fields: {', '.join(missing_fields)}",
+            ))
+
+        # Validate hash consistency.
+        recorded_sha = str(manifest.get("artifact_sha256", ""))
+        if recorded_sha and combined.exists():
+            actual_sha = file_sha256(combined)
+            if actual_sha != recorded_sha:
+                findings.append(Finding(
+                    "P1",
+                    f"{artifact_rel}/manifest.json",
+                    f"artifact_sha256 mismatch: manifest says {recorded_sha[:16]}... but combined.md hash is {actual_sha[:16]}...",
+                ))
+
+        # Validate source hash staleness.
+        source_path_str = str(manifest.get("source_path", ""))
+        if source_path_str:
+            source_path = (vault / source_path_str)
+            if source_path.exists():
+                recorded_source_sha = str(manifest.get("source_sha256", ""))
+                if recorded_source_sha:
+                    actual_source_sha = file_sha256(source_path)
+                    if actual_source_sha != recorded_source_sha:
+                        findings.append(Finding(
+                            "P1",
+                            f"{artifact_rel}/manifest.json",
+                            "source_sha256 mismatch: source file has changed since last parse",
+                        ))
+
+        # Validate anchors sub-object.
+        anchors = manifest.get("anchors")
+        if anchors is not None:
+            if not isinstance(anchors, dict):
+                findings.append(Finding("P1", f"{artifact_rel}/manifest.json", "anchors must be a JSON object"))
+            else:
+                missing_anchors = sorted(MANIFEST_ANCHOR_FIELDS - set(anchors))
+                if missing_anchors:
+                    findings.append(Finding("P2", f"{artifact_rel}/manifest.json", f"anchors missing fields: {', '.join(missing_anchors)}"))
+
+        # Validate chunks.jsonl if present.
+        chunks = load_chunks(artifact_dir)
+        if chunks:
+            chunk_ids: set[str] = set()
+            for i, chunk in enumerate(chunks):
+                chunk_missing = sorted(CHUNK_REQUIRED_FIELDS - set(chunk))
+                if chunk_missing:
+                    findings.append(Finding(
+                        "P1",
+                        f"{artifact_rel}/chunks.jsonl:{i + 1}",
+                        f"chunk missing required fields: {', '.join(chunk_missing)}",
+                    ))
+                    continue
+                cid = str(chunk.get("chunk_id", ""))
+                if cid in chunk_ids:
+                    findings.append(Finding("P1", f"{artifact_rel}/chunks.jsonl:{i + 1}", f"duplicate chunk_id: {cid}"))
+                chunk_ids.add(cid)
+
+                line_start = chunk.get("line_start")
+                line_end = chunk.get("line_end")
+                if isinstance(line_start, int) and isinstance(line_end, int):
+                    if line_start < 1 or line_end < line_start:
+                        findings.append(Finding("P1", f"{artifact_rel}/chunks.jsonl:{i + 1}", "invalid line range"))
+                char_start = chunk.get("char_start")
+                char_end = chunk.get("char_end")
+                if isinstance(char_start, int) and isinstance(char_end, int):
+                    if char_start < 0 or char_end < char_start:
+                        findings.append(Finding("P1", f"{artifact_rel}/chunks.jsonl:{i + 1}", "invalid char range"))
+
+                art_path = str(chunk.get("artifact_path", ""))
+                if art_path and not (artifact_dir / art_path).exists():
+                    findings.append(Finding("P1", f"{artifact_rel}/chunks.jsonl:{i + 1}", f"chunk references missing artifact: {art_path}"))
+
+
 def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     check_structure(vault, findings)
@@ -363,6 +468,7 @@ def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Findi
     check_claim_hygiene(vault, findings)
     check_claim_graph(vault, findings)
     check_state_jsonl(vault, findings)
+    check_artifacts(vault, findings)
     if obsidian:
         check_obsidian(vault, findings)
     if graph:
