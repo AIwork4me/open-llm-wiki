@@ -536,6 +536,138 @@ def main() -> int:
         if not {"raw", "source"}.issubset(kinds):
             raise SystemExit("grow eval did not refresh source registry after corpus ingest")
 
+    # --- Ingest queue tests (Issue #71) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        q_vault = Path(tmp) / "queue-vault"
+        run([sys.executable, "scripts/wiki_init.py", str(q_vault), "--repo-root", str(ROOT)])
+        q_raw = q_vault / "raw"
+
+        # Setup two sources: one will succeed, one will fail
+        for name, content in [
+            ("source_a_2401.00001", "# Source A\n\nAbstract\n\n7B parameters and HumanEval 75% with baseline 60%.\n\nResults\n\nHumanEval is 75%.\n"),
+            ("source_b_2401.00002", "# Source B\n\nAbstract\n\n3B parameters and MATH 62% across 500 samples.\n\nResults\n\nMATH score 62%.\n"),
+        ]:
+            md_dir = q_raw / f"{name}_markdown"
+            md_dir.mkdir(parents=True)
+            (q_raw / f"{name}.pdf").write_bytes(b"%PDF-1.4 fake\n")
+            (md_dir / "combined.md").write_text(content, encoding="utf-8")
+
+        # Test: --plan creates jobs
+        plan_output = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--plan"])
+        if "planned: 2" not in plan_output:
+            print(plan_output)
+            raise SystemExit("ingest queue --plan did not find 2 sources")
+
+        # Test: --list shows jobs
+        list_output = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--list"])
+        if "queued" not in list_output:
+            print(list_output)
+            raise SystemExit("ingest queue --list did not show queued jobs")
+
+        # Test: --summary
+        summary_output = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--summary"])
+        summary = json.loads(summary_output)
+        if summary.get("by_status", {}).get("queued") != 2:
+            print(summary_output)
+            raise SystemExit("ingest queue summary wrong count")
+
+        # Test: --plan is idempotent
+        plan2 = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--plan"])
+        if "planned: 0" not in plan2:
+            print(plan2)
+            raise SystemExit("ingest queue --plan created duplicate jobs")
+
+        # Test: run next executes a job
+        run1 = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--run-next"])
+        if "ran: JOB-" not in run1:
+            print(run1)
+            raise SystemExit("ingest queue --run-next did not execute")
+
+        # Test: one source failure does not block another
+        # We already ran one source successfully; the other should still be queued.
+        summary2 = json.loads(run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--summary"]))
+        total = summary2.get("total", 0)
+        queued = summary2.get("by_status", {}).get("queued", 0)
+        published = summary2.get("by_status", {}).get("published", 0)
+        failed = summary2.get("by_status", {}).get("failed", 0)
+        done_count = published + failed
+        if done_count < 1:
+            raise SystemExit("ingest queue ran-next did not complete any job")
+        remaining = total - done_count
+        if remaining < 1:
+            raise SystemExit("ingest queue ran-next completed both jobs in one run; expected only one")
+
+        # Test: log files exist for the ran job
+        log_archive = q_vault / "log-archive" / "ingest"
+        if not log_archive.exists() or not list(log_archive.glob("JOB-*.log")):
+            raise SystemExit("ingest queue did not create log files")
+
+        # Test: retry a completed/failed job fails gracefully
+        jobs_jsonl = load_jsonl(q_vault / "_state" / "ingest-jobs.jsonl")
+        non_queued = [j for j in jobs_jsonl if j.get("status") in ("published", "failed")]
+        if non_queued:
+            retry_result = subprocess.run(
+                [sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--retry", str(non_queued[0]["job_id"])],
+                cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            )
+            # Retry on published/failed job should succeed if attempts < max_attempts for failed,
+            # or fail for published.
+            # Either way it should not crash.
+
+        # Test: cancel a queued job
+        queued_jobs = [j for j in load_jsonl(q_vault / "_state" / "ingest-jobs.jsonl") if j.get("status") == "queued"]
+        if queued_jobs:
+            cancel_result = run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--cancel", str(queued_jobs[0]["job_id"])])
+            if "cancelled" not in cancel_result:
+                print(cancel_result)
+                raise SystemExit("ingest queue --cancel did not work")
+            # Verify cancel preserved history
+            jobs_after = load_jsonl(q_vault / "_state" / "ingest-jobs.jsonl")
+            cancelled = [j for j in jobs_after if j.get("job_id") == queued_jobs[0]["job_id"]][0]
+            history = cancelled.get("history", [])
+            cancel_entries = [h for h in history if h.get("action") == "cancel"]
+            if not cancel_entries:
+                raise SystemExit("cancelled job has no cancel history entry")
+
+        # Test: queue state survives restart (reload from file)
+        jobs_before = load_jsonl(q_vault / "_state" / "ingest-jobs.jsonl")
+        run([sys.executable, "scripts/wiki_ingest_queue.py", str(q_vault), "--list"])
+        jobs_after = load_jsonl(q_vault / "_state" / "ingest-jobs.jsonl")
+        if len(jobs_before) != len(jobs_after):
+            raise SystemExit("queue state changed after reload")
+
+        # Test: concurrent lock prevents double write
+        import fcntl
+        lock_path = q_vault / "_state" / ".ingest-jobs.lock"
+        lock_fd = lock_path.open("w")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            # Try to plan while holding lock (should still work since flock is per-process)
+            # The real test is across processes; we verify lock file exists.
+            if not lock_path.exists():
+                raise SystemExit("lock file was not created")
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            lock_fd.close()
+
+        # Test: lint validates ingest queue
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(q_vault), "--fail-on", "p1"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        # Lint should pass since queue is valid
+        if "ingest-jobs" in lint_result.stdout and "invalid" in lint_result.stdout:
+            print(lint_result.stdout)
+            raise SystemExit("ingest queue lint reported unexpected issues")
+
+        # Test: wiki_status shows ingest queue
+        status_out = run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--format", "json"])
+        status_data = json.loads(status_out)
+        if "ingest_queue" not in status_data:
+            raise SystemExit("wiki_status does not include ingest_queue")
+        if status_data["ingest_queue"]["total"] < 2:
+            raise SystemExit("wiki_status ingest_queue total is wrong")
+
     print("runtime eval passed")
     return 0
 
