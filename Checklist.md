@@ -64,6 +64,13 @@ uv sync --dev --locked
 - [ ] `uv run python scripts/wiki_init.py <new-vault> --repo-root .
       --obsidian --obsidian-skip-downloads` creates `.obsidian/app.json`,
       `.obsidian/community-plugins.json`, `raw/inbox/`, and `sortspec.md`.
+- [ ] Obsidian initialization creates `_dashboard.md`, `AGENTS.md`,
+      `CLAUDE.md`, and `templates/agent-prompts/`.
+- [ ] `uv run python scripts/wiki_status.py <new-vault>` reports raw inbox,
+      drafts, stable sources, review queue, recent reports, common commands,
+      prompt templates, and safe writeback flow.
+- [ ] `uv run python scripts/wiki_status.py <new-vault> --write-dashboard`
+      refuses to overwrite an existing dashboard unless `--force` is set.
 - [ ] `uv run python scripts/wiki_lint.py <new-vault> --obsidian --fail-on p1`
       reports Obsidian status without P0/P1 findings.
 - [ ] `uv run python scripts/wiki_graph_export.py <new-vault> --format json`
@@ -398,6 +405,9 @@ uv sync --dev --locked
 - [ ] Obsidian Canvas export writes `canvas/wiki-graph.canvas` with file nodes
       linking back to Markdown pages.
 - [ ] The generated vault can be opened in Obsidian with usable backlinks.
+- [ ] Obsidian-enabled vaults expose a usable `_dashboard.md` homepage with
+      pipeline status, review queue, recent reports, runtime commands, and
+      Agent prompt templates.
 - [ ] Optional Obsidian profile does not replace source QA, claim graph,
       semantic QA, contradiction scan, or query writeback approval gates.
 - [ ] Optional graph export does not replace source QA, evidence anchors,
@@ -423,6 +433,9 @@ uv sync --dev --locked
       to run `wiki_lint.py --obsidian`.
 - [ ] Documentation explains how to export the optional graph layer and how to
       run `wiki_lint.py --graph`.
+- [ ] Documentation explains how to refresh `_dashboard.md` with
+      `wiki_status.py` and that the dashboard is generated status, not evidence
+      or approval.
 
 ## 21. GitHub And Release Readiness
 

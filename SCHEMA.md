@@ -21,10 +21,14 @@ my-llm-wiki/
 |-- assets/          # optional Obsidian/diagram assets
 |-- log-archive/     # archived log entries by month
 |-- templates/       # source and concept templates
+|   `-- agent-prompts/
 |-- _state/          # counters and internal state
 |   |-- source-registry.jsonl
 |   |-- growth-queue.jsonl
 |   `-- science-review-queue.jsonl
+|-- _dashboard.md    # optional generated Obsidian status homepage
+|-- AGENTS.md        # optional generated agent context for the vault
+|-- CLAUDE.md        # optional generated Claude context for the vault
 |-- SCHEMA.md
 |-- README.md
 |-- index.md
@@ -280,6 +284,11 @@ Rules:
   citations next to the claims they illustrate.
 - Obsidian plugins must not bypass QA gates, science review, contradiction
   checks, or query writeback approval.
+- `_dashboard.md` is generated status, not evidence. Regenerate it with
+  `wiki_status.py --write-dashboard`; do not use it to approve review items.
+- `templates/agent-prompts/` may contain reusable agent workflows, but those
+  prompts must preserve the same raw immutability, review, QA, and writeback
+  approval boundaries as the runtime.
 
 ## Optional Knowledge Graph Layer
 
@@ -330,5 +339,7 @@ python .open-llm-wiki/scripts/wiki_search.py . "query terms"
 python .open-llm-wiki/scripts/wiki_obsidian_setup.py . --profile minimal --skip-downloads
 python .open-llm-wiki/scripts/wiki_graph_export.py . --format json
 python .open-llm-wiki/scripts/wiki_graph_export.py . --format obsidian-canvas --output canvas/wiki-graph.canvas
+python .open-llm-wiki/scripts/wiki_status.py .
+python .open-llm-wiki/scripts/wiki_status.py . --write-dashboard --force
 python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."
 ```
