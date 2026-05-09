@@ -352,6 +352,48 @@ def check_graph(vault: Path, findings: list[Finding]) -> None:
         )
 
 
+def check_impact_graph(vault: Path, findings: list[Finding]) -> None:
+    from wiki_impact import EDGE_TYPES, _load_jsonl
+
+    graph_path = vault / "_state" / "impact-graph.jsonl"
+    if not graph_path.exists():
+        findings.append(Finding("P2", "_state/impact-graph.jsonl", "impact graph has not been generated"))
+        return
+
+    edges = _load_jsonl(graph_path)
+    if not edges:
+        return
+
+    source_ids = {path.stem for path in (vault / "sources").glob("LLM-*.md")}
+    concept_ids = {path.stem for path in (vault / "concepts").glob("*.md")}
+
+    for number, edge in enumerate(edges, 1):
+        rel = edge.get("relationship", "")
+        if rel not in EDGE_TYPES:
+            findings.append(Finding("P2", f"_state/impact-graph.jsonl:{number}", f"unknown edge relationship: {rel!r}"))
+        for required in ("edge_id", "from_type", "from_id", "to_type", "to_id", "relationship"):
+            if not edge.get(required):
+                findings.append(Finding("P1", f"_state/impact-graph.jsonl:{number}", f"edge is missing required field: {required}"))
+
+        # Validate chunk references point to existing sources
+        if edge.get("from_type") == "chunk" and edge.get("from_id") and edge["from_id"] not in source_ids:
+            findings.append(Finding("P2", f"_state/impact-graph.jsonl:{number}", f"edge references missing chunk source {edge['from_id']!r}"))
+        if edge.get("to_type") == "chunk" and edge.get("to_id") and edge["to_id"] not in source_ids:
+            findings.append(Finding("P2", f"_state/impact-graph.jsonl:{number}", f"edge references missing chunk source {edge['to_id']!r}"))
+        if edge.get("to_type") == "concept_section" and edge.get("to_id") and edge["to_id"] not in concept_ids:
+            findings.append(Finding("P2", f"_state/impact-graph.jsonl:{number}", f"edge references missing concept {edge['to_id']!r}"))
+
+    # Check stale queue explainability
+    queue_path = vault / "_state" / "stale-queue.jsonl"
+    if queue_path.exists():
+        queue = _load_jsonl(queue_path)
+        for number, item in enumerate(queue, 1):
+            if not item.get("reason"):
+                findings.append(Finding("P2", f"_state/stale-queue.jsonl:{number}", "stale item is missing reason field"))
+            if not item.get("upstream"):
+                findings.append(Finding("P2", f"_state/stale-queue.jsonl:{number}", "stale item is missing upstream field"))
+
+
 def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     check_structure(vault, findings)
@@ -363,6 +405,7 @@ def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Findi
     check_claim_hygiene(vault, findings)
     check_claim_graph(vault, findings)
     check_state_jsonl(vault, findings)
+    check_impact_graph(vault, findings)
     if obsidian:
         check_obsidian(vault, findings)
     if graph:

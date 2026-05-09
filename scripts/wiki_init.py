@@ -44,6 +44,7 @@ RUNTIME_SCRIPTS = [
     "wiki_contradictions.py",
     "wiki_discover_sources.py",
     "wiki_graph_export.py",
+    "wiki_impact.py",
     "wiki_grow.py",
     "wiki_ingest_corpus.py",
     "wiki_normalize_metrics.py",
@@ -153,6 +154,8 @@ def main() -> int:
     write_file(vault / "_state" / "growth-queue.jsonl", "", args.force)
     write_file(vault / "_state" / "science-review-queue.jsonl", "", args.force)
     write_file(vault / "_state" / "source-registry.jsonl", "", args.force)
+    write_file(vault / "_state" / "impact-graph.jsonl", "", args.force)
+    write_file(vault / "_state" / "stale-queue.jsonl", "", args.force)
     write_file(vault / "claims" / "claims.jsonl", "", args.force)
     write_file(
         vault / "index.md",

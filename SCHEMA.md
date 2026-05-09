@@ -25,7 +25,9 @@ my-llm-wiki/
 |-- _state/          # counters and internal state
 |   |-- source-registry.jsonl
 |   |-- growth-queue.jsonl
-|   `-- science-review-queue.jsonl
+|   |-- science-review-queue.jsonl
+|   |-- impact-graph.jsonl
+|   `-- stale-queue.jsonl
 |-- _dashboard.md    # optional generated Obsidian status homepage
 |-- AGENTS.md        # optional generated agent context for the vault
 |-- CLAUDE.md        # optional generated Claude context for the vault
@@ -314,6 +316,47 @@ Rules:
 - `wiki_lint.py --graph` reports broken evidence paths or isolated source and
   concept nodes; it does not apply fixes.
 
+## Change Impact Graph
+
+`_state/impact-graph.jsonl` tracks data lineage between raw sources, parse
+artifacts, chunks (source pages), claims, concept sections, and contradiction
+groups. Each row is an edge with:
+
+- `edge_id`: deterministic hash identifying the edge
+- `from_type` / `from_id`: source node type and identifier
+- `to_type` / `to_id`: target node type and identifier
+- `relationship`: edge type (see below)
+- `from_hash` / `to_hash`: content hashes when applicable
+- `created_at` / `updated_at`
+
+Edge types:
+
+- `raw_source_to_parse_artifact`: raw PDF to parsed Markdown
+- `parse_artifact_to_chunk`: parsed Markdown to source page
+- `chunk_to_claim`: source page to extracted claim
+- `claim_to_source_page_section`: claim to its evidence anchor
+- `claim_to_concept_section`: claim to concept pages it feeds
+- `claim_to_contradiction_group`: claim to contradiction reports
+- `concept_to_dashboard_card`: concept to dashboard (placeholder)
+- `concept_to_review_queue_item`: concept to science review entries
+
+Propagation rules for staleness:
+
+1. Raw source hash change → artifact, chunks, claims stale
+2. Artifact hash change → chunks, claims stale
+3. Source page hash change → claims stale
+4. Stale claim → concept sections stale
+
+`_state/stale-queue.jsonl` records items that need refresh. Each row has:
+
+- `item_id`, `item_type`, `item_ref`: identifies the stale artefact
+- `reason`: why the item is stale
+- `upstream`: which upstream change caused it
+- `status`: `stale`, `refreshed`, `ignored`, or `review`
+
+`wiki_concept_revision.py --only-affected` limits concept refresh to only
+those concept sections present in the stale queue, avoiding full recalculation.
+
 ## Runtime Commands
 
 The vault may contain runtime scripts at `.open-llm-wiki/scripts/`:
@@ -331,6 +374,7 @@ python .open-llm-wiki/scripts/wiki_science_review.py . --queue --write-report
 python .open-llm-wiki/scripts/wiki_discover_sources.py .
 python .open-llm-wiki/scripts/wiki_queue.py . plan
 python .open-llm-wiki/scripts/wiki_concept_revision.py . --apply
+python .open-llm-wiki/scripts/wiki_concept_revision.py . --apply --only-affected
 python .open-llm-wiki/scripts/wiki_grow.py . --discover-sources --plan-queue --queue-cadence weekly --science-review --apply-concept-revision
 python .open-llm-wiki/scripts/wiki_lint.py . --fail-on p1
 python .open-llm-wiki/scripts/wiki_lint.py . --obsidian --fail-on p1
@@ -339,6 +383,10 @@ python .open-llm-wiki/scripts/wiki_search.py . "query terms"
 python .open-llm-wiki/scripts/wiki_obsidian_setup.py . --profile minimal --skip-downloads
 python .open-llm-wiki/scripts/wiki_graph_export.py . --format json
 python .open-llm-wiki/scripts/wiki_graph_export.py . --format obsidian-canvas --output canvas/wiki-graph.canvas
+python .open-llm-wiki/scripts/wiki_impact.py . --build
+python .open-llm-wiki/scripts/wiki_impact.py . --source LLM-0001
+python .open-llm-wiki/scripts/wiki_impact.py . --stale --write-queue
+python .open-llm-wiki/scripts/wiki_impact.py . --mark-refreshed stale-XXXXXXXXXXXX
 python .open-llm-wiki/scripts/wiki_status.py .
 python .open-llm-wiki/scripts/wiki_status.py . --write-dashboard --force
 python .open-llm-wiki/scripts/wiki_writeback.py . --target concepts/page.md --query "..." --body "..."

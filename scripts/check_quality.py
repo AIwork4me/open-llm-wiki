@@ -113,6 +113,7 @@ def check_docs() -> None:
         "scripts/wiki_contradictions.py",
         "scripts/wiki_discover_sources.py",
         "scripts/wiki_graph_export.py",
+        "scripts/wiki_impact.py",
         "scripts/wiki_grow.py",
         "scripts/wiki_ingest_corpus.py",
         "scripts/wiki_normalize_metrics.py",
