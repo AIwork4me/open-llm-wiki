@@ -536,6 +536,80 @@ def main() -> int:
         if not {"raw", "source"}.issubset(kinds):
             raise SystemExit("grow eval did not refresh source registry after corpus ingest")
 
+    # --- Dashboard Action Model Tests (Issue #73) ---
+    with tempfile.TemporaryDirectory() as td:
+        q_vault = Path(td) / "action-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", q_vault)
+
+        # Test: --actions generates JSON with open_actions
+        actions_out = run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--actions"])
+        actions_data = json.loads(actions_out)
+        if "open_actions" not in actions_data:
+            raise SystemExit("dashboard actions: missing open_actions key")
+        if not isinstance(actions_data["open_actions"], list):
+            raise SystemExit("dashboard actions: open_actions is not a list")
+        if actions_data["total_actions"] < 1:
+            raise SystemExit("dashboard actions: expected at least 1 action from minimal-vault")
+
+        # Test: actions.jsonl is written and consistent
+        actions_jsonl = load_jsonl(q_vault / "_state" / "actions.jsonl")
+        if len(actions_jsonl) != actions_data["total_actions"]:
+            raise SystemExit("dashboard actions: actions.jsonl count mismatch")
+
+        # Test: each action has required fields
+        required_action_fields = {"action_id", "kind", "severity", "title", "body",
+                                  "reason", "status", "primary_object_type", "primary_object_id"}
+        for action in actions_jsonl:
+            missing = required_action_fields - set(action)
+            if missing:
+                raise SystemExit(f"dashboard actions: action missing fields {missing}")
+
+        # Test: --write-dashboard produces markdown with Action Panel (while actions are open)
+        run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--write-dashboard", "--force"])
+        dashboard_text = (q_vault / "_dashboard.md").read_text(encoding="utf-8")
+        if "## Action Panel" not in dashboard_text:
+            raise SystemExit("dashboard actions: Action Panel section missing from dashboard")
+        if "What should I do next" not in dashboard_text:
+            raise SystemExit("dashboard actions: Action Panel guidance text missing")
+
+        # Test: resolve action and verify it disappears from open list
+        first_action_id = actions_data["open_actions"][0]["action_id"]
+        run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--resolve-action", first_action_id])
+        state_rows = load_jsonl(q_vault / "_state" / "action-state.jsonl")
+        resolved_ids = {str(r.get("action_id")) for r in state_rows if r.get("status") == "resolved"}
+        if first_action_id not in resolved_ids:
+            raise SystemExit("dashboard actions: resolve did not persist")
+
+        # Re-generate actions, resolved should not appear
+        actions_out2 = run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--actions"])
+        actions_data2 = json.loads(actions_out2)
+        open_ids = {a["action_id"] for a in actions_data2["open_actions"]}
+        if first_action_id in open_ids:
+            raise SystemExit("dashboard actions: resolved action still showing as open")
+
+        # Test: ignore action
+        if len(actions_data2["open_actions"]) > 0:
+            ignore_id = actions_data2["open_actions"][0]["action_id"]
+            run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--ignore-action", ignore_id])
+            actions_out3 = run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--actions"])
+            actions_data3 = json.loads(actions_out3)
+            open_ids3 = {a["action_id"] for a in actions_data3["open_actions"]}
+            if ignore_id in open_ids3:
+                raise SystemExit("dashboard actions: ignored action still showing as open")
+
+        # Test: source_updated action appears when source is recently updated
+        import datetime as dt
+        today_str = dt.date.today().isoformat()
+        source_path = q_vault / "sources" / "LLM-0001.md"
+        source_text = source_path.read_text(encoding="utf-8")
+        source_text = source_text.replace("updated: 2026-05-01", f"updated: {today_str}")
+        source_path.write_text(source_text, encoding="utf-8")
+        actions_out4 = run([sys.executable, "scripts/wiki_status.py", str(q_vault), "--actions"])
+        actions_data4 = json.loads(actions_out4)
+        kinds = {a["kind"] for a in actions_data4["open_actions"]}
+        if "source_updated" not in kinds:
+            raise SystemExit("dashboard actions: source_updated action not generated for recently updated source")
+
     print("runtime eval passed")
     return 0
 

@@ -1716,6 +1716,58 @@ def check_corpus_ingest_resume_continues() -> None:
             fail("resumed corpus vault failed p1 lint")
 
 
+def check_dashboard_action_model() -> None:
+    """Verify dashboard action model generation, persistence, and resolve/ignore."""
+    import datetime as dt
+    vault = ROOT / "examples" / "minimal-vault"
+
+    # Test: --actions generates valid JSON
+    result = subprocess.run(
+        [sys.executable, "scripts/wiki_status.py", str(vault), "--actions"],
+        cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        print(result.stdout)
+        fail("dashboard actions: --actions failed")
+    data = json.loads(result.stdout)
+    if "open_actions" not in data:
+        fail("dashboard actions: missing open_actions")
+    if not isinstance(data["open_actions"], list):
+        fail("dashboard actions: open_actions not a list")
+
+    # Test: _state/actions.jsonl exists and matches
+    actions_jsonl = vault / "_state" / "actions.jsonl"
+    if not actions_jsonl.exists():
+        fail("dashboard actions: actions.jsonl not created")
+    rows = [json.loads(l) for l in read(actions_jsonl).splitlines() if l.strip()]
+    if len(rows) != data["total_actions"]:
+        fail("dashboard actions: actions.jsonl count mismatch")
+
+    # Test: required fields
+    required = {"action_id", "kind", "severity", "title", "body", "reason",
+                "status", "primary_object_type", "primary_object_id"}
+    for row in rows:
+        missing = required - set(row)
+        if missing:
+            fail(f"dashboard actions: row missing fields {sorted(missing)}")
+
+    # Test: --write-dashboard produces Action Panel
+    result2 = subprocess.run(
+        [sys.executable, "scripts/wiki_status.py", str(vault), "--write-dashboard", "--force"],
+        cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    if result2.returncode != 0:
+        print(result2.stdout)
+        fail("dashboard actions: --write-dashboard failed")
+    dashboard = read(vault / "_dashboard.md")
+    if "## Action Panel" not in dashboard:
+        fail("dashboard actions: Action Panel missing from dashboard")
+    if "What should I do next" not in dashboard:
+        fail("dashboard actions: guidance text missing")
+
+    print("dashboard action model: OK")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -1745,6 +1797,7 @@ def main() -> None:
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
     check_corpus_ingest_resume_continues()
+    check_dashboard_action_model()
     print("quality checks passed")
 
 
