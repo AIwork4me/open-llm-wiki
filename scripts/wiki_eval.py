@@ -536,6 +536,68 @@ def main() -> int:
         if not {"raw", "source"}.issubset(kinds):
             raise SystemExit("grow eval did not refresh source registry after corpus ingest")
 
+    # --- Ingest Plan Tests (Issue #65) ---
+    with tempfile.TemporaryDirectory() as td:
+        q_vault = Path(td) / "plan-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", q_vault)
+
+        # Test: basic plan generation
+        plan_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault)])
+        if "Ingest Plan" not in plan_out:
+            raise SystemExit("ingest plan: missing Ingest Plan header")
+        if "published" not in plan_out.lower():
+            raise SystemExit("ingest plan: LLM-0001 not shown as published")
+
+        # Test: JSON output
+        json_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--format", "json"])
+        plan_data = json.loads(json_out)
+        if not plan_data.get("plan"):
+            raise SystemExit("ingest plan: empty plan")
+        states = {item["plan_state"] for item in plan_data["plan"]}
+        if "published" not in states:
+            raise SystemExit("ingest plan: published state missing")
+
+        # Test: --write creates ingest-plan.jsonl
+        run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--write"])
+        plan_jsonl = q_vault / "_state" / "ingest-plan.jsonl"
+        if not plan_jsonl.exists():
+            raise SystemExit("ingest plan: --write did not create ingest-plan.jsonl")
+        plan_rows = load_jsonl(plan_jsonl)
+        if len(plan_rows) != len(plan_data["plan"]):
+            raise SystemExit("ingest plan: jsonl row count mismatch")
+
+        # Test: raw/inbox files appear as ready candidates
+        (q_vault / "raw" / "inbox").mkdir(parents=True, exist_ok=True)
+        (q_vault / "raw" / "inbox" / "test-paper.pdf").write_bytes(b"fake pdf content")
+        inbox_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--format", "json"])
+        inbox_data = json.loads(inbox_out)
+        inbox_items = [p for p in inbox_data["plan"] if p.get("candidate_source") == "inbox"]
+        if not inbox_items:
+            raise SystemExit("ingest plan: inbox file not detected")
+        if inbox_items[0]["plan_state"] != "ready":
+            raise SystemExit(f"ingest plan: inbox item state is {inbox_items[0]['plan_state']}, expected ready")
+
+        # Test: hash-skip — unchanged published source is cached
+        published_items = [p for p in inbox_data["plan"] if p.get("plan_state") == "published"]
+        if not published_items:
+            raise SystemExit("ingest plan: no published items found")
+
+        # Test: source IDs stable across resume (re-run plan)
+        run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--write"])
+        plan_rows2 = load_jsonl(q_vault / "_state" / "ingest-plan.jsonl")
+        published_ids = {r["source_id"] for r in plan_rows2 if r.get("plan_state") == "published"}
+        if "LLM-0001" not in published_ids:
+            raise SystemExit("ingest plan: LLM-0001 ID not stable across re-runs")
+
+        # Test: lint validates ingest-plan.jsonl
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(q_vault), "--fail-on", "p1"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if lint_result.returncode != 0:
+            print(lint_result.stdout)
+            raise SystemExit("ingest plan: lint failed after plan generation")
+
     print("runtime eval passed")
     return 0
 

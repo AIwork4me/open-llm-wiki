@@ -130,6 +130,7 @@ def check_docs() -> None:
         "scripts/wiki_status.py",
         "scripts/wiki_writeback.py",
         "scripts/wiki_eval.py",
+        "scripts/wiki_ingest_plan.py",
         "obsidian/app.json",
         "obsidian/appearance.json",
         "obsidian/hotkeys.json",
@@ -799,6 +800,7 @@ def run_runtime_checks() -> None:
         [sys.executable, "scripts/pdf_to_markdown.py", "--help"],
         [sys.executable, "scripts/wiki_obsidian_setup.py", "--help"],
         [sys.executable, "scripts/wiki_eval.py"],
+        [sys.executable, "scripts/wiki_ingest_plan.py", "--help"],
         [sys.executable, "scripts/wiki_status.py", "--help"],
     ]
     for command in commands:
@@ -1716,6 +1718,85 @@ def check_corpus_ingest_resume_continues() -> None:
             fail("resumed corpus vault failed p1 lint")
 
 
+def check_ingest_plan() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "plan-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", vault)
+
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("ingest plan generation failed on minimal vault")
+        if "published" not in result.stdout.lower():
+            print(result.stdout)
+            fail("ingest plan did not detect published source LLM-0001")
+
+        json_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if json_result.returncode != 0:
+            print(json_result.stdout)
+            fail("ingest plan JSON output failed")
+        plan_data = json.loads(json_result.stdout)
+        states = {item["plan_state"] for item in plan_data.get("plan", [])}
+        if "published" not in states:
+            fail("ingest plan JSON missing published state for LLM-0001")
+
+        write_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--write"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if write_result.returncode != 0:
+            print(write_result.stdout)
+            fail("ingest plan --write failed")
+        plan_path = vault / "_state" / "ingest-plan.jsonl"
+        if not plan_path.exists():
+            fail("ingest plan --write did not create _state/ingest-plan.jsonl")
+
+        (vault / "raw" / "inbox").mkdir(parents=True, exist_ok=True)
+        (vault / "raw" / "inbox" / "new-paper.pdf").write_bytes(b"fake pdf", encoding="utf-8")
+        inbox_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if inbox_result.returncode != 0:
+            print(inbox_result.stdout)
+            fail("ingest plan with inbox candidate failed")
+        inbox_data = json.loads(inbox_result.stdout)
+        inbox_items = [item for item in inbox_data["plan"] if item.get("candidate_source") == "inbox"]
+        if not inbox_items:
+            fail("ingest plan did not detect raw/inbox candidate")
+        if inbox_items[0]["plan_state"] != "ready":
+            fail(f"ingest plan inbox item state is {inbox_items[0]['plan_state']}, expected ready")
+
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if lint_result.returncode != 0:
+            print(lint_result.stdout)
+            fail("lint failed after ingest plan generation")
+
+
 def main() -> None:
     check_skills()
     check_docs()
@@ -1745,6 +1826,7 @@ def main() -> None:
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
     check_corpus_ingest_resume_continues()
+    check_ingest_plan()
     print("quality checks passed")
 
 

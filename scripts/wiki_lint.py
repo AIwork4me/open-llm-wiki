@@ -226,6 +226,50 @@ def check_state_jsonl(vault: Path, findings: list[Finding]) -> None:
                 findings.append(Finding("P1", f"{relpath}:{number}", "state row is not valid JSON"))
 
 
+def check_ingest_plan(vault: Path, findings: list[Finding]) -> None:
+    plan_path = vault / "_state" / "ingest-plan.jsonl"
+    if not plan_path.exists():
+        return
+    from wiki_ingest_plan import VALID_PLAN_STATES
+    for number, line in enumerate(read_text(plan_path).splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            findings.append(Finding("P1", f"_state/ingest-plan.jsonl:{number}", "plan row is not valid JSON"))
+            continue
+        state = str(item.get("plan_state", ""))
+        if state and state not in VALID_PLAN_STATES:
+            findings.append(Finding("P1", f"_state/ingest-plan.jsonl:{number}", f"invalid plan_state: {state}"))
+        source_id = str(item.get("source_id", ""))
+        if source_id and item.get("plan_state") == "published":
+            if not (vault / "sources" / f"{source_id}.md").exists():
+                findings.append(Finding("P1", f"_state/ingest-plan.jsonl:{number}", f"published plan entry references missing source {source_id}.md"))
+
+
+def check_source_registry_traceability(vault: Path, findings: list[Finding]) -> None:
+    registry_path = vault / "_state" / "source-registry.jsonl"
+    if not registry_path.exists():
+        return
+    source_ids = {path.stem for path in (vault / "sources").glob("LLM-*.md")}
+    for number, line in enumerate(read_text(registry_path).splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        reg_source_id = str(row.get("source_id", ""))
+        if not reg_source_id:
+            continue
+        kind = str(row.get("kind", ""))
+        if kind == "source" and reg_source_id in source_ids:
+            sha = str(row.get("sha256", ""))
+            if not sha:
+                findings.append(Finding("P2", f"_state/source-registry.jsonl:{number}", f"registry row for {reg_source_id} missing sha256"))
+
+
 def load_optional_json(path: Path, vault: Path, findings: list[Finding], expected_type: type) -> object | None:
     try:
         data = json.loads(read_text(path))
@@ -363,6 +407,8 @@ def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Findi
     check_claim_hygiene(vault, findings)
     check_claim_graph(vault, findings)
     check_state_jsonl(vault, findings)
+    check_ingest_plan(vault, findings)
+    check_source_registry_traceability(vault, findings)
     if obsidian:
         check_obsidian(vault, findings)
     if graph:
