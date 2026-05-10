@@ -40,7 +40,7 @@ or what gap does it fill?
 | --- | --- | --- | --- |
 | ... | contribution/metric | supported/review/contested | anchor |
 
-## Key Metrics
+## Key Data
 
 | Metric | Value | Baseline | Protocol | Evidence |
 | --- | --- | --- | --- | --- |

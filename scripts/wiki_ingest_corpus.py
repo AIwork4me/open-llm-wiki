@@ -354,7 +354,7 @@ concepts: [{concepts_yaml}]
 
 > Claims are extracted after running `wiki_claims.py`. Claim counts are shown in frontmatter.
 
-## Key Metrics
+## Key Data
 
 | Metric | Value | Baseline | Evidence |
 | --- | --- | --- | --- |

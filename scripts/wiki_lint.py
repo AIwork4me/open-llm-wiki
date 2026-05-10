@@ -44,7 +44,7 @@ SOURCE_EXTENDED_FIELDS = {"type", "source_id", "source_uuid", "title", "status",
 SOURCE_REQUIRED_SECTIONS = [
     "## One-Sentence Conclusion",
     "## Why It Matters",
-    "## Key Metrics",
+    "## Key Data",
     "## Evidence & Source Anchors",
     "## QA/Review Status",
 ]

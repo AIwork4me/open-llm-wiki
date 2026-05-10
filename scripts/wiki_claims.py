@@ -125,11 +125,11 @@ def contribution_claim(source_id: str, title: str, body: str, concepts: list[str
 
 def metric_claims(source_id: str, title: str, body: str, concepts: list[str], relpath: str) -> list[dict[str, object]]:
     claims: list[dict[str, object]] = []
-    key_data = section(body, "Key Metrics")
-    anchor_heading = "Key Metrics"
+    key_data = section(body, "Key Data")
+    anchor_heading = "Key Data"
     if not key_data:
-        key_data = section(body, "Key Data")
-        anchor_heading = "Key Data"
+        key_data = section(body, "Key Metrics")
+        anchor_heading = "Key Metrics"
     for row in parse_table_rows(key_data):
         if len(row) < 4:
             continue
