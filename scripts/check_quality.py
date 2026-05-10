@@ -1767,7 +1767,7 @@ def check_ingest_plan() -> None:
             fail("ingest plan --write did not create _state/ingest-plan.jsonl")
 
         (vault / "raw" / "inbox").mkdir(parents=True, exist_ok=True)
-        (vault / "raw" / "inbox" / "new-paper.pdf").write_bytes(b"fake pdf", encoding="utf-8")
+        (vault / "raw" / "inbox" / "new-paper.pdf").write_bytes(b"fake pdf")
         inbox_result = subprocess.run(
             [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--format", "json"],
             cwd=ROOT,
