@@ -1841,7 +1841,7 @@ def check_artifact_contract_lint() -> None:
         manifest = {
             "source_path": "raw/test_paper.pdf",
             "source_sha256": hashlib.sha256(b"%PDF-1.4 test\n").hexdigest(),
-            "artifact_sha256": hashlib.sha256(combined_text.encode("utf-8")).hexdigest(),
+            "artifact_sha256": hashlib.sha256((artifact_dir / "combined.md").read_bytes()).hexdigest(),
             "combined": "combined.md",
             "parser": "test-parser",
             "parser_version": "1.0.0",

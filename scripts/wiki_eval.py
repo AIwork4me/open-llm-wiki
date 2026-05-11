@@ -554,7 +554,7 @@ def main() -> int:
         (complete_dir / "combined.md").write_text(combined_text, encoding="utf-8")
         import hashlib
         source_sha = hashlib.sha256(b"%PDF-1.4 complete\n").hexdigest()
-        artifact_sha = hashlib.sha256(combined_text.encode("utf-8")).hexdigest()
+        artifact_sha = hashlib.sha256((complete_dir / "combined.md").read_bytes()).hexdigest()
         complete_manifest = {
             "source_path": "raw/complete_paper.pdf",
             "source_sha256": source_sha,
@@ -603,7 +603,7 @@ def main() -> int:
         stale_manifest = dict(complete_manifest)
         stale_manifest["source_path"] = "raw/stale_paper.pdf"
         stale_manifest["source_sha256"] = hashlib.sha256(b"old content").hexdigest()
-        stale_manifest["artifact_sha256"] = hashlib.sha256(b"# Stale\n\nOld content.\n").hexdigest()
+        stale_manifest["artifact_sha256"] = hashlib.sha256((stale_dir / "combined.md").read_bytes()).hexdigest()
         (stale_dir / "manifest.json").write_text(
             json.dumps(stale_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
