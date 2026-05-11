@@ -536,12 +536,95 @@ def main() -> int:
         if not {"raw", "source"}.issubset(kinds):
             raise SystemExit("grow eval did not refresh source registry after corpus ingest")
 
+    # --- Ingest Plan Tests (Issue #65) ---
+    with tempfile.TemporaryDirectory() as td:
+        q_vault = Path(td) / "plan-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", q_vault)
+
+        # Test: basic plan generation
+        plan_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault)])
+        if "Ingest Plan" not in plan_out:
+            raise SystemExit("ingest plan: missing Ingest Plan header")
+        if "published" not in plan_out.lower():
+            raise SystemExit("ingest plan: LLM-0001 not shown as published")
+
+        # Test: JSON output
+        json_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--format", "json"])
+        plan_data = json.loads(json_out)
+        if not plan_data.get("plan"):
+            raise SystemExit("ingest plan: empty plan")
+        states = {item["plan_state"] for item in plan_data["plan"]}
+        if "published" not in states:
+            raise SystemExit("ingest plan: published state missing")
+
+        # Test: --write creates ingest-plan.jsonl
+        run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--write"])
+        plan_jsonl = q_vault / "_state" / "ingest-plan.jsonl"
+        if not plan_jsonl.exists():
+            raise SystemExit("ingest plan: --write did not create ingest-plan.jsonl")
+        if not (q_vault / "_state" / "ingest-plan.json").exists():
+            raise SystemExit("ingest plan: --write did not create ingest-plan.json")
+        plan_rows = load_jsonl(plan_jsonl)
+        if len(plan_rows) != len(plan_data["plan"]):
+            raise SystemExit("ingest plan: jsonl row count mismatch")
+
+        # Test: parsed corpus candidate is the original raw source, not combined.md.
+        raw_pdf = q_vault / "raw" / "paper_a.pdf"
+        artifact_dir = q_vault / "raw" / "paper_a_markdown"
+        artifact_dir.mkdir(parents=True)
+        raw_pdf.write_bytes(b"%PDF-1.4 paper a\n")
+        (artifact_dir / "combined.md").write_text("# Paper A\n\n7B parameters and HumanEval 75%.\n", encoding="utf-8")
+        artifact_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--format", "json"])
+        artifact_plan = json.loads(artifact_out)
+        artifact_items = [
+            item for item in artifact_plan["plan"]
+            if item.get("artifact_path") == "raw/paper_a_markdown/combined.md"
+        ]
+        if not artifact_items:
+            raise SystemExit("ingest plan: parsed artifact metadata missing")
+        artifact_item = artifact_items[0]
+        if artifact_item.get("candidate_path") != "raw/paper_a.pdf":
+            raise SystemExit("ingest plan: parsed artifact used as source candidate path")
+        if artifact_item.get("candidate_source") != "raw_source":
+            raise SystemExit("ingest plan: parsed artifact used as candidate source")
+
+        # Test: raw/inbox files appear as ready candidates
+        (q_vault / "raw" / "inbox").mkdir(parents=True, exist_ok=True)
+        (q_vault / "raw" / "inbox" / "test-paper.pdf").write_bytes(b"fake pdf content")
+        inbox_out = run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--format", "json"])
+        inbox_data = json.loads(inbox_out)
+        inbox_items = [p for p in inbox_data["plan"] if p.get("candidate_source") == "inbox"]
+        if not inbox_items:
+            raise SystemExit("ingest plan: inbox file not detected")
+        if inbox_items[0]["plan_state"] != "ready":
+            raise SystemExit(f"ingest plan: inbox item state is {inbox_items[0]['plan_state']}, expected ready")
+
+        # Test: hash-skip — unchanged published source is cached
+        published_items = [p for p in inbox_data["plan"] if p.get("plan_state") == "published"]
+        if not published_items:
+            raise SystemExit("ingest plan: no published items found")
+
+        # Test: source IDs stable across resume (re-run plan)
+        run([sys.executable, "scripts/wiki_ingest_plan.py", str(q_vault), "--write"])
+        plan_rows2 = load_jsonl(q_vault / "_state" / "ingest-plan.jsonl")
+        published_ids = {r["source_id"] for r in plan_rows2 if r.get("plan_state") == "published"}
+        if "LLM-0001" not in published_ids:
+            raise SystemExit("ingest plan: LLM-0001 ID not stable across re-runs")
+
+        # Test: lint validates ingest-plan.jsonl
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(q_vault), "--fail-on", "p1"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if lint_result.returncode != 0:
+            print(lint_result.stdout)
+            raise SystemExit("ingest plan: lint failed after plan generation")
+
     # --- Claim Ledger Tests (Issue #69) ---
     with tempfile.TemporaryDirectory() as td:
         q_vault = Path(td) / "claim-ledger-vault"
         shutil.copytree(ROOT / "examples" / "minimal-vault", q_vault)
 
-        # Re-extract claims with new ledger schema
         run([sys.executable, "scripts/wiki_claims.py", str(q_vault)])
 
         claims_path = q_vault / "claims" / "claims.jsonl"
@@ -549,32 +632,27 @@ def main() -> int:
         if not claims:
             raise SystemExit("claim ledger: no claims extracted")
 
-        # Verify ledger fields present
-        required_fields = {"claim_id", "source_uuid", "source_id", "chunk_id",
-                          "claim_text", "normalized_claim", "evidence_quote",
-                          "evidence_hash", "anchor", "verdict", "created_at", "updated_at"}
+        required_fields = {
+            "claim_id", "source_uuid", "source_id", "chunk_id",
+            "claim_text", "normalized_claim", "evidence_quote",
+            "evidence_hash", "anchor", "verdict", "created_at", "updated_at",
+        }
         for claim in claims:
             missing = required_fields - set(claim)
             if missing:
                 raise SystemExit(f"claim ledger: claim {claim.get('claim_id')} missing fields: {missing}")
 
-        # Test: evidence_quote must be short
+        import hashlib
         for claim in claims:
             eq = str(claim.get("evidence_quote", ""))
             if len(eq) > 300:
                 raise SystemExit(f"claim ledger: evidence_quote too long ({len(eq)} chars)")
-
-        # Test: evidence_hash matches
-        import hashlib
-        for claim in claims:
-            eq = str(claim.get("evidence_quote", ""))
             eh = str(claim.get("evidence_hash", ""))
             if eq and eh:
                 expected = hashlib.sha256(eq.encode("utf-8")).hexdigest()[:16]
                 if eh != expected:
                     raise SystemExit(f"claim ledger: evidence_hash mismatch for {claim.get('claim_id')}")
 
-        # Test: assign verdicts
         run([sys.executable, "scripts/wiki_normalize_metrics.py", str(q_vault), "--in-place"])
         run([sys.executable, "scripts/wiki_semantic_qa.py", str(q_vault), "--assign-verdicts", "--in-place"])
         claims_after = load_jsonl(claims_path)
@@ -582,8 +660,6 @@ def main() -> int:
         if not supported:
             raise SystemExit("claim ledger: no claims marked as supported after verdict assignment")
 
-        # Test: contradicted claim does not enter stable concept
-        # Manually mark one claim as contradicted
         claims_after[0]["verdict"] = "contradicted"
         write_jsonl(claims_path, claims_after)
         run([sys.executable, "scripts/wiki_concept_revision.py", str(q_vault), "--apply"])
@@ -593,7 +669,6 @@ def main() -> int:
         if contradicted_id in concept_text:
             raise SystemExit("claim ledger: contradicted claim appeared in concept synthesis")
 
-        # Test: evidence_hash mismatch causes lint failure
         claims_after[0]["verdict"] = "supported"
         claims_after[0]["evidence_hash"] = "bad_hash_value"
         write_jsonl(claims_path, claims_after)
@@ -604,12 +679,10 @@ def main() -> int:
         if lint_result.returncode == 0:
             raise SystemExit("claim ledger: lint should fail on evidence_hash mismatch")
 
-        # Restore valid hash
         eq = str(claims_after[0].get("evidence_quote", ""))
         claims_after[0]["evidence_hash"] = hashlib.sha256(eq.encode("utf-8")).hexdigest()[:16]
         write_jsonl(claims_path, claims_after)
 
-        # Test: stale source marks claims stale
         from wiki_claims import mark_stale_claims
         marked = mark_stale_claims(claims_path, {"LLM-0001"})
         if marked == 0:
