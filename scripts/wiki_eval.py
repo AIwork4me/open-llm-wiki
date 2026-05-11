@@ -637,18 +637,12 @@ def main() -> int:
             raise SystemExit("queue state changed after reload")
 
         # Test: concurrent lock prevents double write
-        import fcntl
+        from wiki_ingest_queue import QueueLock
         lock_path = q_vault / "_state" / ".ingest-jobs.lock"
-        lock_fd = lock_path.open("w")
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        try:
-            # Try to plan while holding lock (should still work since flock is per-process)
-            # The real test is across processes; we verify lock file exists.
+        lock = QueueLock(lock_path)
+        with lock:
             if not lock_path.exists():
                 raise SystemExit("lock file was not created")
-        finally:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            lock_fd.close()
 
         # Test: lint validates ingest queue
         lint_result = subprocess.run(

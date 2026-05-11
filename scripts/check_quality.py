@@ -1797,6 +1797,35 @@ def check_ingest_queue_basic() -> None:
             fail("ingest queue did not create log files")
 
 
+def check_ingest_queue_import_without_fcntl() -> None:
+    code = r"""
+import importlib.abc
+import sys
+from pathlib import Path
+
+class BlockFcntl(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "fcntl":
+            raise ModuleNotFoundError("No module named 'fcntl'")
+        return None
+
+sys.meta_path.insert(0, BlockFcntl())
+sys.path.insert(0, str(Path("scripts").resolve()))
+import wiki_ingest_queue
+print(wiki_ingest_queue.QueueLock.__name__)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0 or "QueueLock" not in result.stdout:
+        print(result.stdout)
+        fail("ingest queue imports fcntl at module import time")
+
+
 def check_ingest_queue_retry_cancel() -> None:
     """Test retry preserves history, cancel prevents partial state."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -2055,6 +2084,7 @@ def main() -> None:
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
     check_corpus_ingest_resume_continues()
+    check_ingest_queue_import_without_fcntl()
     check_ingest_queue_basic()
     check_ingest_queue_retry_cancel()
     check_ingest_queue_lock()

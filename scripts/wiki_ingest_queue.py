@@ -13,12 +13,12 @@ State machine:
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 from collections import Counter
 from datetime import datetime, timezone
@@ -79,21 +79,32 @@ class QueueLock:
 
     def __init__(self, lock_path: Path):
         self._path = lock_path
-        self._fd: object | None = None
+        self._fd: int | None = None
 
-    def acquire(self) -> None:
+    def acquire(self, timeout: float = 30.0) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = self._path.open("w")
-        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        started = time.monotonic()
+        while True:
+            try:
+                self._fd = os.open(str(self._path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                payload = f"pid={os.getpid()} acquired={now_iso()}\n".encode("utf-8")
+                os.write(self._fd, payload)
+                return
+            except FileExistsError:
+                if time.monotonic() - started >= timeout:
+                    raise TimeoutError(f"timed out waiting for queue lock: {self._path}")
+                time.sleep(0.05)
 
     def release(self) -> None:
         if self._fd is not None:
             try:
-                fcntl.flock(self._fd, fcntl.LOCK_UN)
+                os.close(self._fd)
             except OSError:
                 pass
             try:
-                self._fd.close()
+                self._path.unlink()
+            except FileNotFoundError:
+                pass
             except OSError:
                 pass
             self._fd = None
@@ -431,7 +442,8 @@ def main() -> int:
         return 0
 
     if args.plan:
-        added = plan(vault, queue_path)
+        with lock:
+            added = plan(vault, queue_path)
         print(f"planned: {added} new jobs")
         return 0
 
