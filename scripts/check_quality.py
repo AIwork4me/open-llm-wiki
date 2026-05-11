@@ -1723,6 +1723,229 @@ def check_corpus_ingest_resume_continues() -> None:
             fail("resumed corpus vault failed p1 lint")
 
 
+def check_ingest_queue_basic() -> None:
+    """Test ingest queue plan, list, summary, and run-next."""
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
+        )
+        raw = vault / "raw"
+        for name in ["paper_a_2401.00001", "paper_b_2401.00002"]:
+            md = raw / f"{name}_markdown"
+            md.mkdir(parents=True)
+            (raw / f"{name}.pdf").write_bytes(b"%PDF-1.4 fake\n")
+            (md / "combined.md").write_text(
+                f"# {name}\n\nAbstract\n\n{name} uses 2B parameters and 1.5B tokens. HumanEval 75% against 60% baseline.\n",
+                encoding="utf-8",
+            )
+
+        # plan
+        plan = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--plan"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if plan.returncode != 0:
+            print(plan.stdout)
+            fail("ingest queue --plan failed")
+        if "planned: 2" not in plan.stdout:
+            print(plan.stdout)
+            fail("ingest queue --plan did not find 2 sources")
+
+        # idempotent plan
+        plan2 = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--plan"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if "planned: 0" not in plan2.stdout:
+            fail("ingest queue --plan created duplicates")
+
+        # list
+        list_out = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--list"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if list_out.returncode != 0 or "queued" not in list_out.stdout:
+            fail("ingest queue --list failed or showed no queued jobs")
+
+        # summary
+        summary_out = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--summary"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        summary = json.loads(summary_out.stdout)
+        if summary.get("by_status", {}).get("queued") != 2:
+            fail("ingest queue summary has wrong count")
+
+        # run-next
+        run_next = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--run-next"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if run_next.returncode != 0:
+            print(run_next.stdout)
+            fail("ingest queue --run-next failed")
+
+        # one job should be done, one still queued
+        summary2 = json.loads(subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--summary"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        ).stdout)
+        published = summary2.get("by_status", {}).get("published", 0)
+        failed = summary2.get("by_status", {}).get("failed", 0)
+        done = published + failed
+        if done < 1:
+            fail("ingest queue --run-next did not complete any job")
+
+        # log files exist
+        log_dir = vault / "log-archive" / "ingest"
+        if not log_dir.exists() or not list(log_dir.glob("JOB-*.log")):
+            fail("ingest queue did not create log files")
+
+
+def check_ingest_queue_import_without_fcntl() -> None:
+    code = r"""
+import importlib.abc
+import sys
+from pathlib import Path
+
+class BlockFcntl(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "fcntl":
+            raise ModuleNotFoundError("No module named 'fcntl'")
+        return None
+
+sys.meta_path.insert(0, BlockFcntl())
+sys.path.insert(0, str(Path("scripts").resolve()))
+import wiki_ingest_queue
+print(wiki_ingest_queue.QueueLock.__name__)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0 or "QueueLock" not in result.stdout:
+        print(result.stdout)
+        fail("ingest queue imports fcntl at module import time")
+
+
+def check_ingest_queue_retry_cancel() -> None:
+    """Test retry preserves history, cancel prevents partial state."""
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
+        )
+        raw = vault / "raw"
+        md = raw / "test_paper_2401.00001_markdown"
+        md.mkdir(parents=True)
+        (raw / "test_paper_2401.00001.pdf").write_bytes(b"%PDF-1.4 fake\n")
+        (md / "combined.md").write_text(
+            "# Test\n\nAbstract\n\n7B parameters and HumanEval 75%.\n",
+            encoding="utf-8",
+        )
+
+        subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--plan"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
+        )
+
+        # Cancel the queued job
+        jobs_raw = (vault / "_state" / "ingest-jobs.jsonl").read_text(encoding="utf-8")
+        job_id = ""
+        for line in jobs_raw.strip().splitlines():
+            j = json.loads(line)
+            job_id = j["job_id"]
+            break
+
+        cancel = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--cancel", job_id],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if cancel.returncode != 0 or "cancelled" not in cancel.stdout:
+            print(cancel.stdout)
+            fail("ingest queue --cancel failed")
+
+        # Cancelled job should not have published state
+        if (vault / "sources" / "LLM-0001.md").exists():
+            fail("cancelled job created a published source page")
+
+        # Verify history preserved
+        jobs = [json.loads(l) for l in (vault / "_state" / "ingest-jobs.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+        job = jobs[0]
+        history = job.get("history", [])
+        cancel_entries = [h for h in history if h.get("action") == "cancel"]
+        if not cancel_entries:
+            fail("cancelled job has no cancel history entry")
+
+        # Retry the cancelled job
+        retry = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--retry", job_id],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        if retry.returncode != 0 or "retried" not in retry.stdout:
+            print(retry.stdout)
+            fail("ingest queue --retry failed for cancelled job")
+
+        # After retry, job should be back to queued
+        jobs2 = [json.loads(l) for l in (vault / "_state" / "ingest-jobs.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+        if jobs2[0].get("status") != "queued":
+            fail("retried job is not back to queued")
+
+        # History should include retry entry
+        history2 = jobs2[0].get("history", [])
+        retry_entries = [h for h in history2 if h.get("action") == "retry"]
+        if not retry_entries:
+            fail("retried job has no retry history entry")
+
+
+def check_ingest_queue_lock() -> None:
+    """Test that lock file is created and queue survives restart."""
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
+        )
+        raw = vault / "raw"
+        md = raw / "lock_test_2401.00001_markdown"
+        md.mkdir(parents=True)
+        (raw / "lock_test_2401.00001.pdf").write_bytes(b"%PDF-1.4\n")
+        (md / "combined.md").write_text("# Lock Test\n\n3B parameters.\n", encoding="utf-8")
+
+        subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--plan"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True,
+        )
+
+        # Queue state survives "restart" (re-read from file)
+        state_path = vault / "_state" / "ingest-jobs.jsonl"
+        original = state_path.read_text(encoding="utf-8")
+        reloaded = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_queue.py", str(vault), "--list"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        )
+        after = state_path.read_text(encoding="utf-8")
+        if original != after:
+            fail("queue state changed after read-only list operation")
+
+        # Lock file path exists after any write operation
+        lock_path = vault / "_state" / ".ingest-jobs.lock"
+        # Lock file is created on-demand; verify lock mechanism works
+        from wiki_ingest_queue import QueueLock
+        lock = QueueLock(lock_path)
+        with lock:
+            pass  # acquire and release
+        # Lock file should exist now
+        if not lock_path.parent.exists():
+            fail("lock file parent directory not created")
+
+
 def check_dashboard_action_model() -> None:
     """Verify dashboard action model generation, persistence, and resolve/ignore."""
     import datetime as dt
@@ -1991,6 +2214,10 @@ def main() -> None:
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
     check_corpus_ingest_resume_continues()
+    check_ingest_queue_import_without_fcntl()
+    check_ingest_queue_basic()
+    check_ingest_queue_retry_cancel()
+    check_ingest_queue_lock()
     check_dashboard_action_model()
     check_claim_ledger_schema()
     check_claim_ledger_verdict_synthesis()

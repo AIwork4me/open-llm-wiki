@@ -408,8 +408,11 @@ def build_status(vault: Path, limit: int = 8) -> dict[str, Any]:
     claims = load_jsonl(vault / "claims" / "claims.jsonl")
     science_queue = load_jsonl(vault / "_state" / "science-review-queue.jsonl")
     growth_queue = load_jsonl(vault / "_state" / "growth-queue.jsonl")
+    ingest_jobs = load_jsonl(vault / "_state" / "ingest-jobs.jsonl")
     growth_status = Counter(str(row.get("status", "unknown")) for row in growth_queue)
     growth_actions = Counter(str(row.get("action", "unknown")) for row in growth_queue)
+    ingest_status = Counter(str(row.get("status", "unknown")) for row in ingest_jobs)
+    ingest_step = Counter(str(row.get("current_step", "unknown")) for row in ingest_jobs)
     contradiction_reports = markdown_files(vault / "qa-reports", "*contradiction*.md")
 
     prompt_templates = []
@@ -442,10 +445,18 @@ def build_status(vault: Path, limit: int = 8) -> dict[str, Any]:
             "growth_queue": len(growth_queue),
             "growth_queue_pending": growth_status.get("pending", 0),
             "stale_concepts": len(stale_concepts(vault)),
+            "ingest_jobs": len(ingest_jobs),
+            "ingest_jobs_queued": ingest_status.get("queued", 0),
+            "ingest_jobs_failed": ingest_status.get("failed", 0),
         },
         "growth_queue": {
             "by_status": dict(sorted(growth_status.items())),
             "by_action": dict(sorted(growth_actions.items())),
+        },
+        "ingest_queue": {
+            "total": len(ingest_jobs),
+            "by_status": dict(sorted(ingest_status.items())),
+            "by_step": dict(sorted(ingest_step.items())),
         },
         "actions": actions,
         "open_actions": open_actions,
@@ -533,6 +544,8 @@ def render_status(status: dict[str, Any]) -> str:
 
     growth_status = ", ".join(f"{key}: {value}" for key, value in status["growth_queue"]["by_status"].items()) or "none"
     growth_actions = ", ".join(f"{key}: {value}" for key, value in status["growth_queue"]["by_action"].items()) or "none"
+    ingest_info = status.get("ingest_queue", {})
+    ingest_summary = ", ".join(f"{key}: {value}" for key, value in ingest_info.get("by_status", {}).items()) or "none"
 
     # Action panel
     open_actions = status.get("open_actions", [])
@@ -569,6 +582,7 @@ def render_status(status: dict[str, Any]) -> str:
         f"| Contradiction reports | {counts['contradiction_reports']} | Resolve candidates before synthesis |\n"
         f"| Concepts | {counts['concepts']} | Keep every material statement cited |\n"
         f"| Growth queue | {counts['growth_queue']} total / {counts['growth_queue_pending']} pending | Run due tasks only when expected |\n"
+        f"| Ingest queue | {counts.get('ingest_jobs', 0)} total / {counts.get('ingest_jobs_queued', 0)} queued / {counts.get('ingest_jobs_failed', 0)} failed | Run `wiki_ingest_queue.py --run-next` |\n"
         f"| Stale concepts | {counts['stale_concepts']} | Refresh pages with time-sensitive wording |\n"
         f"| Last lint result | {lint_result} | Run `wiki_lint.py --obsidian --fail-on p1` before PRs or writeback |\n"
         f"| Open actions | **{len(open_actions_sorted)}** | See Action Panel above |\n\n"
@@ -578,6 +592,9 @@ def render_status(status: dict[str, Any]) -> str:
         f"- Growth queue by status: {growth_status}\n"
         f"- Growth queue by action: {growth_actions}\n"
         f"- Open actions: **{len(open_actions_sorted)}** - see Action Panel above\n\n"
+        "## Ingest Queue\n\n"
+        f"- Total jobs: **{ingest_info.get('total', 0)}**\n"
+        f"- By status: {ingest_summary}\n\n"
         "## Recent Sources\n\n"
         f"{list_links(status['recent_sources'], 'No stable source pages yet.')}\n\n"
         "## Recent Concepts\n\n"

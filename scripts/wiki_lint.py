@@ -289,6 +289,60 @@ def check_state_jsonl(vault: Path, findings: list[Finding]) -> None:
                 findings.append(Finding("P1", f"{relpath}:{number}", "state row is not valid JSON"))
 
 
+def check_ingest_queue(vault: Path, findings: list[Finding]) -> None:
+    queue_path = vault / "_state" / "ingest-jobs.jsonl"
+    if not queue_path.exists():
+        return
+    jobs: list[dict[str, object]] = []
+    for number, line in enumerate(read_text(queue_path).splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            job = json.loads(line)
+        except json.JSONDecodeError:
+            findings.append(Finding("P1", f"_state/ingest-jobs.jsonl:{number}", "job row is not valid JSON"))
+            continue
+        jobs.append(job)
+        jid = str(job.get("job_id", ""))
+        if not jid:
+            findings.append(Finding("P1", f"_state/ingest-jobs.jsonl:{number}", "job missing job_id"))
+
+        status = str(job.get("status", ""))
+        from wiki_ingest_queue import VALID_STATUSES, JOB_REQUIRED_FIELDS
+        if status and status not in VALID_STATUSES:
+            findings.append(Finding("P1", f"_state/ingest-jobs.jsonl:{number}", f"invalid status: {status}"))
+
+        missing = sorted(JOB_REQUIRED_FIELDS - set(job))
+        if missing:
+            findings.append(Finding("P1", f"_state/ingest-jobs.jsonl:{number}", f"job missing required fields: {', '.join(missing[:6])}"))
+
+        log_rel = str(job.get("log_path", ""))
+        if log_rel and not (vault / log_rel).exists():
+            findings.append(Finding("P1", f"_state/ingest-jobs.jsonl:{number}", f"job log_path does not exist: {log_rel}"))
+
+    # job_id uniqueness
+    seen_ids: dict[str, int] = {}
+    for i, job in enumerate(jobs):
+        jid = str(job.get("job_id", ""))
+        if jid in seen_ids:
+            findings.append(Finding("P1", "_state/ingest-jobs.jsonl", f"duplicate job_id: {jid} (rows {seen_ids[jid]} and {i + 1})"))
+        else:
+            seen_ids[jid] = i + 1
+
+    # Registry consistency: if a source is published, its source page should exist.
+    for i, job in enumerate(jobs):
+        status = str(job.get("status", ""))
+        source_id = str(job.get("source_id", ""))
+        if status == "published" and source_id:
+            source_path = vault / "sources" / f"{source_id}.md"
+            if not source_path.exists():
+                findings.append(Finding(
+                    "P1",
+                    f"_state/ingest-jobs.jsonl:{i + 1}",
+                    f"job {job.get('job_id')} is published but source page {source_id}.md does not exist",
+                ))
+
+
 def check_source_registry(vault: Path, findings: list[Finding]) -> None:
     registry_path = vault / "_state" / "source-registry.jsonl"
     if not registry_path.exists():
@@ -509,6 +563,7 @@ def lint(vault: Path, obsidian: bool = False, graph: bool = False) -> list[Findi
     check_claim_graph(vault, findings)
     check_synthesis_verdicts(vault, findings)
     check_state_jsonl(vault, findings)
+    check_ingest_queue(vault, findings)
     check_source_registry(vault, findings)
     check_ingest_plan(vault, findings)
     if obsidian:

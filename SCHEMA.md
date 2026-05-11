@@ -309,6 +309,75 @@ raw evidence.
 Planning supports `now`, `daily`, `weekly`, and `monthly` cadence values and
 stages dependent actions a few minutes apart.
 
+## Per-Source Ingest Queue
+
+`_state/ingest-jobs.jsonl` records per-source ingest jobs. Each source gets an
+independent job with its own status, step, attempt counter, log file, and
+history. One source failing does not block other sources.
+
+### Job Row Fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `job_id` | string | unique identifier, e.g. `JOB-20260509120000-abcd` |
+| `source_uuid` | string | hash-derived UUID for the source artifact |
+| `source_id` | string | wiki source ID (`LLM-NNNN`) or empty if unassigned |
+| `kind` | string | job kind: `parse` |
+| `status` | string | current job-level status (see state machine) |
+| `current_step` | string | current pipeline step |
+| `attempt` | integer | number of execution attempts |
+| `max_attempts` | integer | maximum allowed attempts (default 3) |
+| `started_at` | ISO 8601 | first attempt start time |
+| `ended_at` | ISO 8601 | last attempt end time |
+| `last_error` | string | error from the most recent failure |
+| `log_path` | string | vault-relative path to the job log file |
+| `inputs` | array of strings | input file paths |
+| `outputs` | array of strings | output file paths |
+| `history` | array of objects | step transition history with timestamps |
+
+### State Machine
+
+```text
+candidate -> queued -> parsing -> parsed -> drafting -> drafted ->
+  extracting_claims -> claims_ready -> qa_running ->
+  qa_passed | qa_failed -> publishing -> published ->
+  stale | failed | cancelled | archived
+```
+
+Terminal statuses: `published`, `failed`, `cancelled`, `archived`, `stale`.
+
+### CLI Commands
+
+```bash
+python scripts/wiki_ingest_queue.py <vault> --plan
+python scripts/wiki_ingest_queue.py <vault> --run-next
+python scripts/wiki_ingest_queue.py <vault> --run-source <source_uuid>
+python scripts/wiki_ingest_queue.py <vault> --retry <job_id>
+python scripts/wiki_ingest_queue.py <vault> --cancel <job_id>
+python scripts/wiki_ingest_queue.py <vault> --list
+python scripts/wiki_ingest_queue.py <vault> --summary
+```
+
+### Locking
+
+A file-based lock (`_state/.ingest-jobs.lock`) prevents concurrent processes
+from writing to the queue, registry, id-counter, claims, or source pages
+simultaneously. The lock is acquired using `fcntl.flock` (POSIX advisory lock).
+
+### Retry Semantics
+
+- Retry preserves full history in the `history` array.
+- Each retry increments `attempt`.
+- When `attempt >= max_attempts`, retry is rejected.
+- Historical error messages are preserved in `last_error` and log files.
+- Failed jobs can transition back to `queued` on retry.
+
+### Cancel Semantics
+
+- Cancel is only allowed on non-terminal jobs.
+- Cancelled jobs do not write partial published state.
+- Cancel records the transition in `history`.
+
 ## Second-Pass Scientific Review
 
 `_state/science-review-queue.jsonl` contains claims that need human or second
