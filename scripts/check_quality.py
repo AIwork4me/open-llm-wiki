@@ -591,7 +591,7 @@ def check_claim_extraction() -> None:
             if row.get("claim_type") != "metric":
                 continue
             evidence = str(row.get("evidence", ""))
-            if not evidence.startswith("sources/LLM-0001.md#Key Data"):
+            if not evidence.startswith(("sources/LLM-0001.md#Key Data", "sources/LLM-0001.md#Key Metrics")):
                 fail("metric claim evidence must point back to a source page anchor")
 
 
@@ -1876,6 +1876,78 @@ def check_claim_ledger_stale_hook() -> None:
     print("claim ledger stale hook: OK")
 
 
+def check_concept_revision_frontmatter_verdict_counts() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", vault)
+        concept = vault / "concepts" / "verdict-counts.md"
+        concept.write_text(
+            "---\n"
+            "id: verdict-counts\n"
+            "title: Verdict Counts\n"
+            "supporting_claims: 0\n"
+            "contradicted_claims: 0\n"
+            "stale_claims: 0\n"
+            "---\n\n"
+            "# Verdict Counts\n\n"
+            "## Open Questions\n\n"
+            "- none\n",
+            encoding="utf-8",
+        )
+        claims = [
+            ("claim-supported", "supported", "Supported fact"),
+            ("claim-unreviewed", "unreviewed", "Unreviewed fact"),
+            ("claim-contradicted", "contradicted", "Contradicted fact"),
+            ("claim-stale", "stale", "Stale fact"),
+        ]
+        rows = []
+        for claim_id, verdict, obj in claims:
+            rows.append({
+                "claim_id": claim_id,
+                "source_id": "LLM-0001",
+                "source_uuid": "test-source",
+                "claim_type": "contribution",
+                "predicate": "Reported claim",
+                "object": obj,
+                "concepts": ["verdict-counts"],
+                "evidence": "sources/LLM-0001.md#L1",
+                "verdict": verdict,
+                "needs_review": verdict == "unreviewed",
+            })
+        (vault / "claims" / "claims.jsonl").write_text(
+            "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_concept_revision.py", str(vault), "--apply"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("concept revision verdict count regression failed")
+        text = concept.read_text(encoding="utf-8")
+        for expected in ["supporting_claims: 1", "contradicted_claims: 1", "stale_claims: 1"]:
+            if expected not in text:
+                print(text)
+                fail(f"concept revision frontmatter missing {expected!r}")
+        supporting_section = text.split("## Revision Notes", 1)[0]
+        if "Supported fact" not in supporting_section:
+            print(text)
+            fail("concept revision dropped supported claim from Supporting Evidence")
+        for excluded in ["Contradicted fact", "Stale fact"]:
+            if excluded in supporting_section:
+                print(text)
+                fail(f"concept revision included excluded claim in Supporting Evidence: {excluded}")
+        if "claim-unreviewed" not in text:
+            print(text)
+            fail("concept revision did not keep unreviewed claim in review queue")
+
+    print("concept revision frontmatter verdict counts: OK")
+
+
 def check_ingest_plan_raw_source_stale_contract() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
@@ -1946,6 +2018,8 @@ def check_ingest_plan_raw_source_stale_contract() -> None:
             print(json.dumps(item, indent=2, sort_keys=True))
             fail("ingest plan recommended skip for changed raw PDF")
 
+    print("ingest plan raw source stale contract: OK")
+
 
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
@@ -1995,6 +2069,7 @@ def main() -> None:
     check_claim_ledger_schema()
     check_claim_ledger_verdict_synthesis()
     check_claim_ledger_stale_hook()
+    check_concept_revision_frontmatter_verdict_counts()
     check_ingest_plan_raw_source_stale_contract()
     print("quality checks passed")
 

@@ -142,11 +142,15 @@ def concept_links(body: str, concept_names: set[str]) -> list[str]:
 
 
 def contribution_claim(source_id: str, title: str, body: str, concepts: list[str], relpath: str, chunk_id: str = "") -> dict[str, object] | None:
-    contribution = normalize_space(section(body, "One-Sentence Contribution"))
+    contribution = normalize_space(section(body, "One-Sentence Conclusion"))
+    anchor_heading = "One-Sentence Conclusion"
+    if not contribution:
+        contribution = normalize_space(section(body, "One-Sentence Contribution"))
+        anchor_heading = "One-Sentence Contribution"
     if not contribution:
         return None
     claim_id = f"claim-{short_hash(source_id + contribution)}"
-    evidence_quote = extract_evidence_quote(body, "One-Sentence Contribution")
+    evidence_quote = extract_evidence_quote(body, anchor_heading)
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     return {
         "claim_id": claim_id,
@@ -175,7 +179,7 @@ def contribution_claim(source_id: str, title: str, body: str, concepts: list[str
         "value": None,
         "unit": "",
         "baseline": "",
-        "evidence": relpath + "#One-Sentence Contribution",
+        "evidence": relpath + "#" + anchor_heading,
         "needs_review": False,
     }
 
@@ -183,6 +187,10 @@ def contribution_claim(source_id: str, title: str, body: str, concepts: list[str
 def metric_claims(source_id: str, title: str, body: str, concepts: list[str], relpath: str, chunk_id: str = "") -> list[dict[str, object]]:
     claims: list[dict[str, object]] = []
     key_data = section(body, "Key Data")
+    anchor_heading = "Key Data"
+    if not key_data:
+        key_data = section(body, "Key Metrics")
+        anchor_heading = "Key Metrics"
     now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     for row in parse_table_rows(key_data):
         if len(row) < 4:
@@ -190,7 +198,7 @@ def metric_claims(source_id: str, title: str, body: str, concepts: list[str], re
         metric, raw_value, baseline, evidence = row[:4]
         numeric, unit = parse_value(raw_value)
         claim_id = f"claim-{short_hash(source_id + metric + raw_value + evidence)}"
-        anchor = source_section_anchor(relpath, "Key Data", evidence)
+        anchor = source_section_anchor(relpath, anchor_heading, evidence)
         claim_text = f"{metric}: {raw_value}"
         evidence_quote = evidence if len(evidence) <= MAX_EVIDENCE_QUOTE_LENGTH else evidence[:MAX_EVIDENCE_QUOTE_LENGTH].rsplit(" ", 1)[0] + "..."
         claims.append(
