@@ -25,7 +25,9 @@ my-llm-wiki/
 |-- _state/          # counters and internal state
 |   |-- source-registry.jsonl
 |   |-- growth-queue.jsonl
-|   `-- science-review-queue.jsonl
+|   |-- science-review-queue.jsonl
+|   |-- actions.jsonl
+|   `-- action-state.jsonl
 |-- _dashboard.md    # optional generated Obsidian status homepage
 |-- AGENTS.md        # optional generated agent context for the vault
 |-- CLAUDE.md        # optional generated Claude context for the vault
@@ -317,6 +319,75 @@ Queue rows include `review_id`, `review_status`, `review_decision`,
 `reviewed_by`, `reviewed_at`, `review_reasons`, and `review_questions`.
 Concept revision excludes review-required claims unless the claim is explicitly
 marked `science_review: approved`.
+
+## Action Model
+
+The dashboard action model drives the vault's "what should I do next" panel.
+Actions are generated from vault state and persisted to `_state/actions.jsonl`.
+
+### Action Row Schema
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `action_id` | string | fingerprint-based stable identifier (`act-<hash>`) |
+| `kind` | string | one of the supported action kinds |
+| `severity` | string | `critical`, `high`, `medium`, or `low` |
+| `title` | string | short human-readable action title |
+| `body` | string | description of what needs attention |
+| `reason` | string | why this action matters |
+| `status` | string | `open`, `resolved`, or `ignored` |
+| `primary_object_type` | string | type of the main object (source, claims, directory, etc.) |
+| `primary_object_id` | string | identifier of the main object |
+| `affected_objects` | list of strings | other objects impacted by this action |
+| `recommended_action` | string | what the user should do |
+| `command` | string | CLI command to address this action |
+| `links` | list of strings | related wiki links |
+| `created_at` | ISO 8601 | action generation timestamp |
+| `updated_at` | ISO 8601 | last status change timestamp |
+
+### Supported Kinds
+
+- `parse_required` — unprocessed raw inbox items
+- `artifact_stale` — parse artifacts no longer match source
+- `ingest_failed` — ingest job in failed state
+- `published_duplicate` — duplicate published source detected
+- `qa_failed` — draft pages need QA before promotion
+- `claims_need_review` — claims flagged for scientific review
+- `contradiction_review` — contradiction reports awaiting resolution
+- `unsupported_claim` — claims with contradicted/retracted/stale verdict
+- `concept_stale` — concepts with time-sensitive wording older than 90 days
+- `source_updated` — source page updated within last 7 days
+- `impact_review` — downstream concepts may be affected by a change
+- `runtime_missing` — runtime scripts directory not installed
+- `schema_invalid` — vault structure does not match required schema
+- `lint_error` — lint P0/P1 findings that block writeback
+- `obsidian_profile_missing` — Obsidian settings incomplete
+
+### Action State Persistence
+
+`_state/action-state.jsonl` records resolved or ignored actions so they do not
+reappear on every dashboard refresh. Each row contains `action_id`, `status`,
+and `updated_at`.
+
+Actions are fingerprinted from kind, object type, object ID, and reason. The
+same underlying issue regenerates the same action_id, so resolved issues stay
+suppressed until the underlying condition changes.
+
+### CLI Commands
+
+```bash
+python .open-llm-wiki/scripts/wiki_status.py . --actions
+python .open-llm-wiki/scripts/wiki_status.py . --resolve-action <action_id>
+python .open-llm-wiki/scripts/wiki_status.py . --ignore-action <action_id>
+python .open-llm-wiki/scripts/wiki_status.py . --write-dashboard --force
+```
+
+### Dashboard Rendering
+
+The `_dashboard.md` action panel lists open actions sorted by severity
+(critical > high > medium > low). Each action card includes severity icon,
+kind, reason, affected objects, recommended action, and command. Resolved and
+ignored actions are suppressed.
 
 ## Query Writeback
 
