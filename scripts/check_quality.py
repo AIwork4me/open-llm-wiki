@@ -285,9 +285,9 @@ def check_obsidian_setup_layer() -> None:
         if app.get("communityPluginsEnabled") is not True:
             fail("Obsidian app.json did not enable community plugins")
         plugins = json.loads(read(vault / ".obsidian" / "community-plugins.json"))
-        for plugin_id in ["dataview", "omnisearch", "custom-sort", "obsidian42-strange-new-worlds", "homepage"]:
-            if plugin_id not in plugins:
-                fail(f"minimal Obsidian profile did not enable {plugin_id}")
+        if plugins:
+            print(json.dumps(plugins, indent=2))
+            fail("Obsidian --skip-downloads should not enable missing community plugins")
         if len(plugins) != len(set(plugins)):
             fail("Obsidian community plugin list contains duplicates")
         for item in ["raw/inbox", "sortspec.md", ".obsidian/.gitignore", ".open-llm-wiki/obsidian/plugin-manifest.json"]:
@@ -637,6 +637,31 @@ def check_semantic_qa_qualitative_metric_placeholder() -> None:
             fail("semantic QA still emitted a numeric visibility issue for a qualitative placeholder")
 
 
+def check_graph_export_line_anchor_evidence() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "minimal-vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", vault)
+        claims = [json.loads(line) for line in read(vault / "claims" / "claims.jsonl").splitlines() if line.strip()]
+        if not claims:
+            fail("graph line-anchor test needs claims fixture")
+        claims[0]["evidence"] = "sources/LLM-0001.md#L1"
+        claims[0]["anchor"] = "sources/LLM-0001.md#L1"
+        write_jsonl(vault / "claims" / "claims.jsonl", claims)
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_graph_export.py", str(vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("graph export failed for line-anchor evidence")
+        if "claim evidence heading anchor was not found" in result.stdout:
+            print(result.stdout)
+            fail("graph export treated a valid #L line anchor as a missing heading")
+
+
 def check_setup_script() -> None:
     text = read(ROOT / "setup.sh")
     if ".claude/skills" not in text:
@@ -770,6 +795,8 @@ def check_pdf_to_markdown_help() -> None:
         print(result.stdout)
         fail("pdf_to_markdown.py --help failed")
     required = [
+        "Parser selection:",
+        "--parser local-text",
         "API settings:",
         "OPEN_LLM_WIKI_LAYOUT_TOKEN",
         "AI_STUDIO_LAYOUT_TOKEN",
@@ -784,6 +811,51 @@ def check_pdf_to_markdown_help() -> None:
     if missing:
         print(result.stdout)
         fail(f"pdf_to_markdown.py --help missing expected guidance: {missing}")
+
+
+def check_pdf_to_markdown_local_fallback() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        input_path = root / "input.pdf"
+        output_dir = root / "out"
+        try:
+            from pypdf import PdfWriter
+        except ImportError as exc:
+            raise SystemExit("pypdf dependency is required for local PDF fallback test") from exc
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        with input_path.open("wb") as handle:
+            writer.write(handle)
+        env = os.environ.copy()
+        env.pop("OPEN_LLM_WIKI_LAYOUT_TOKEN", None)
+        env.pop("AI_STUDIO_LAYOUT_TOKEN", None)
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pdf_to_markdown.py",
+                str(input_path),
+                "--output",
+                str(output_dir),
+                "--parser",
+                "auto",
+                "--no-download-images",
+            ],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("pdf_to_markdown.py did not fall back to local text extraction without an API token")
+        if "parser: local-text" not in result.stdout:
+            print(result.stdout)
+            fail("pdf_to_markdown.py did not report local-text parser")
+        manifest = json.loads(read(output_dir / "manifest.json"))
+        if manifest.get("parser") != "local-text" or not (output_dir / "combined.md").exists():
+            print(json.dumps(manifest, indent=2, sort_keys=True))
+            fail("local PDF fallback did not write expected combined markdown and manifest")
 
 
 def run_runtime_checks() -> None:
@@ -890,6 +962,8 @@ def check_pdf_to_markdown_http_errors() -> None:
                     str(input_path),
                     "--output",
                     str(output_dir),
+                    "--parser",
+                    "layout-api",
                     "--api-url",
                     f"http://127.0.0.1:{server.server_address[1]}/layout",
                     "--retries",
@@ -970,6 +1044,8 @@ def check_pdf_corpus_to_markdown_progress_log() -> None:
                     str(input_dir),
                     "--output-root",
                     str(output_root),
+                    "--parser",
+                    "layout-api",
                     "--api-url",
                     f"http://127.0.0.1:{server.server_address[1]}/layout",
                     "--retries",
@@ -1073,6 +1149,32 @@ def check_writeback_semantic_qa_gate() -> None:
         if "applied writeback" not in allowed.stdout:
             print(allowed.stdout)
             fail("writeback explicit failing-QA override did not apply the writeback")
+
+        review_target = [
+            sys.executable,
+            "scripts/wiki_writeback.py",
+            str(writeback_vault),
+            "--target",
+            "reviews/query-writeback/attention-proposal.md",
+            "--query",
+            "summarize attention",
+            "--body",
+            "Evidence, inference, hypothesis, and forecast remain review-only. [[LLM-0001]]",
+        ]
+        review_proposal = subprocess.run(review_target, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if review_proposal.returncode != 0:
+            print(review_proposal.stdout)
+            fail("writeback rejected a reviews/query-writeback proposal target")
+        if "reviews/query-writeback/attention-proposal.md" not in review_proposal.stdout:
+            print(review_proposal.stdout)
+            fail("writeback proposal did not show the review-area target diff")
+        review_apply = subprocess.run(review_target + ["--apply"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        if review_apply.returncode != 0:
+            print(review_apply.stdout)
+            fail("writeback could not persist a review-area proposal artifact")
+        if not (writeback_vault / "reviews" / "query-writeback" / "attention-proposal.md").exists():
+            print(review_apply.stdout)
+            fail("writeback did not write the review-area proposal artifact")
 
 
 def check_safety_boundaries() -> None:
@@ -1767,6 +1869,8 @@ def check_dashboard_action_model() -> None:
         print(result2.stdout)
         fail("dashboard actions: --write-dashboard failed")
     dashboard = read(vault / "_dashboard.md")
+    if "## Start Here" not in dashboard:
+        fail("dashboard actions: reading-first Start Here section missing")
     if "## Action Panel" not in dashboard:
         fail("dashboard actions: Action Panel missing from dashboard")
     if "What should I do next" not in dashboard:
@@ -1876,6 +1980,74 @@ def check_claim_ledger_stale_hook() -> None:
     print("claim ledger stale hook: OK")
 
 
+def check_concept_revision_representative_sources() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        shutil.copytree(ROOT / "examples" / "minimal-vault", vault)
+        concept = vault / "concepts" / "representative-sources.md"
+        concept.write_text(
+            "---\n"
+            "id: representative-sources\n"
+            "title: Representative Sources\n"
+            "---\n\n"
+            "# Representative Sources\n\n"
+            "## Open Questions\n\n"
+            "- none\n",
+            encoding="utf-8",
+        )
+        claims = [
+            ("claim-supported", "supported", "Supported fact"),
+            ("claim-unreviewed", "unreviewed", "Unreviewed fact"),
+            ("claim-contradicted", "contradicted", "Contradicted fact"),
+            ("claim-stale", "stale", "Stale fact"),
+        ]
+        rows = []
+        for claim_id, verdict, obj in claims:
+            rows.append({
+                "claim_id": claim_id,
+                "source_id": "LLM-0001",
+                "source_uuid": "test-source",
+                "claim_type": "contribution",
+                "predicate": "Reported claim",
+                "object": obj,
+                "concepts": ["representative-sources"],
+                "evidence": "sources/LLM-0001.md#L1",
+                "verdict": verdict,
+                "needs_review": verdict == "unreviewed",
+            })
+        (vault / "claims" / "claims.jsonl").write_text(
+            "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_concept_revision.py", str(vault), "--apply"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("concept revision representative sources regression failed")
+        text = concept.read_text(encoding="utf-8")
+        semantic_section = text.split("## Revision Notes", 1)[0]
+        if "Supported fact" not in semantic_section:
+            print(text)
+            fail("concept revision dropped supported claim from semantic matrix")
+        for excluded in ["Contradicted fact", "Stale fact"]:
+            if excluded in semantic_section:
+                print(text)
+                fail(f"concept revision included excluded claim in semantic matrix: {excluded}")
+        if "claim-unreviewed" not in text:
+            print(text)
+            fail("concept revision did not keep unreviewed claim in review queue")
+        if "## Representative Sources" not in text or "[[LLM-0001]]" not in text.split("## Representative Sources", 1)[1]:
+            print(text)
+            fail("concept revision did not preserve or add representative source links")
+
+    print("concept revision representative sources: OK")
+
+
 def check_ingest_plan_raw_source_stale_contract() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
@@ -1972,12 +2144,14 @@ def main() -> None:
     check_status_dashboard_layer()
     check_claim_extraction()
     check_semantic_qa_qualitative_metric_placeholder()
+    check_graph_export_line_anchor_evidence()
     check_setup_script()
     check_setup_python_probe()
     check_setup_runtime()
     check_ingest_corpus_help()
     check_ingest_corpus_boundary_usage()
     check_pdf_to_markdown_help()
+    check_pdf_to_markdown_local_fallback()
     run_runtime_checks()
     check_pdf_to_markdown_http_errors()
     check_pdf_corpus_to_markdown_progress_log()
@@ -1995,6 +2169,7 @@ def main() -> None:
     check_claim_ledger_schema()
     check_claim_ledger_verdict_synthesis()
     check_claim_ledger_stale_hook()
+    check_concept_revision_representative_sources()
     check_ingest_plan_raw_source_stale_contract()
     print("quality checks passed")
 
