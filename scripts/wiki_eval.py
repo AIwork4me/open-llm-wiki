@@ -572,21 +572,23 @@ def main() -> int:
         (complete_dir / "manifest.json").write_text(
             json.dumps(complete_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
+        metric_text = "This paper has 7B parameters and HumanEval 71%."
+        metric_start = combined_text.index(metric_text)
         chunks = [
             {
                 "chunk_id": f"{source_sha[:12]}:00000",
                 "source_uuid": source_sha[:12],
                 "source_id": "",
                 "artifact_path": "combined.md",
-                "heading_path": [],
-                "page": 0,
-                "line_start": 1,
-                "line_end": 1,
-                "char_start": 0,
-                "char_end": 19,
+                "heading_path": ["Abstract"],
+                "page": 1,
+                "line_start": 5,
+                "line_end": 5,
+                "char_start": metric_start,
+                "char_end": metric_start + len(metric_text),
                 "kind": "paragraph",
-                "text_hash": hashlib.sha256(b"# Complete Paper").hexdigest()[:16],
-                "token_count": 3,
+                "text_hash": hashlib.sha256(metric_text.encode("utf-8")).hexdigest()[:16],
+                "token_count": len(metric_text.split()),
             },
         ]
         (complete_dir / "chunks.jsonl").write_text(
@@ -672,6 +674,12 @@ def main() -> int:
         if "artifact status: complete" not in source_page:
             print(source_page)
             raise SystemExit("ingested source page does not record complete artifact status")
+        if "raw/complete_paper_markdown/combined.md#page=1&L5" not in source_page:
+            print(source_page)
+            raise SystemExit("ingested source page evidence did not use chunk page/line anchor")
+        if "Abstract: This paper has 7B parameters and HumanEval 71%." not in source_page:
+            print(source_page)
+            raise SystemExit("ingested source page evidence did not use chunk heading context")
 
         # Test: corpus ingest with legacy artifact
         legacy_vault = Path(tmp) / "legacy-vault"

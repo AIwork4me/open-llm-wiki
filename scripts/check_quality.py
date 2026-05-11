@@ -910,6 +910,89 @@ def check_pdf_to_markdown_http_errors() -> None:
         server.server_close()
 
 
+def check_pdf_to_markdown_manifest_paths() -> None:
+    class SuccessHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            body = {
+                "result": {
+                    "layoutParsingResults": [
+                        {
+                            "markdown": {
+                                "text": "# Paper\n\nThe model reports 7B parameters and HumanEval 71%.",
+                                "images": {},
+                            },
+                            "outputImages": {},
+                        }
+                    ]
+                }
+            }
+            data = json.dumps(body).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args: object) -> None:
+            return
+
+    server = HTTPServer(("127.0.0.1", 0), SuccessHandler)
+    server.timeout = 10
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            raw = vault / "raw"
+            raw.mkdir(parents=True)
+            input_path = raw / "paper.pdf"
+            output_dir = raw / "paper_markdown"
+            input_path.write_bytes(b"%PDF-1.4 paper\n")
+            env = os.environ.copy()
+            env["OPEN_LLM_WIKI_LAYOUT_TOKEN"] = "fake"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/pdf_to_markdown.py",
+                    str(input_path),
+                    "--output",
+                    str(output_dir),
+                    "--api-url",
+                    f"http://127.0.0.1:{server.server_address[1]}/layout",
+                    "--retries",
+                    "0",
+                    "--timeout",
+                    "5",
+                    "--no-download-images",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            if result.returncode != 0:
+                print(result.stdout)
+                fail("pdf_to_markdown.py manifest path test failed")
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("source_path") != "raw/paper.pdf":
+                print(manifest)
+                fail("pdf_to_markdown.py manifest source_path is not vault-relative")
+            if manifest.get("input") != "raw/paper.pdf":
+                print(manifest)
+                fail("pdf_to_markdown.py legacy input field leaked an absolute path")
+            if (
+                Path(str(manifest.get("source_path", ""))).is_absolute()
+                or Path(str(manifest.get("input", ""))).is_absolute()
+            ):
+                print(manifest)
+                fail("pdf_to_markdown.py manifest contains an absolute local path")
+    finally:
+        thread.join(timeout=5)
+        server.server_close()
+
+
 def expect_command_failure(command: list[str], expected: str, message: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode == 0:
@@ -2064,6 +2147,7 @@ def main() -> None:
     check_pdf_to_markdown_help()
     run_runtime_checks()
     check_pdf_to_markdown_http_errors()
+    check_pdf_to_markdown_manifest_paths()
     check_pdf_corpus_to_markdown_progress_log()
     check_writeback_semantic_qa_gate()
     check_safety_boundaries()

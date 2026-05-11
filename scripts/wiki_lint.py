@@ -463,8 +463,31 @@ def check_artifacts(vault: Path, findings: list[Finding]) -> None:
         # Validate source hash staleness.
         source_path_str = str(manifest.get("source_path", ""))
         if source_path_str:
-            source_path = (vault / source_path_str)
-            if source_path.exists():
+            source_ref = Path(source_path_str)
+            if source_ref.is_absolute():
+                findings.append(Finding(
+                    "P1",
+                    f"{artifact_rel}/manifest.json",
+                    "source_path must be relative, not absolute",
+                ))
+                source_path = None
+            else:
+                candidates = [
+                    (vault / source_ref).resolve(),
+                    (artifact_dir / source_ref).resolve(),
+                ]
+                source_path = None
+                for candidate in candidates:
+                    try:
+                        candidate.relative_to(vault.resolve())
+                    except ValueError:
+                        continue
+                    if candidate.exists():
+                        source_path = candidate
+                        break
+                if source_path is None:
+                    source_path = candidates[0]
+            if source_path is not None and source_path.exists():
                 recorded_source_sha = str(manifest.get("source_sha256", ""))
                 if recorded_source_sha:
                     actual_source_sha = file_sha256(source_path)

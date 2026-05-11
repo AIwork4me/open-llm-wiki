@@ -187,6 +187,17 @@ def source_file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def manifest_source_reference(input_path: Path, output_dir: Path) -> str:
+    raw_dir = output_dir.parent
+    if raw_dir.name == "raw":
+        vault = raw_dir.parent
+        try:
+            return input_path.relative_to(vault).as_posix()
+        except ValueError:
+            pass
+    return os.path.relpath(input_path, output_dir).replace(os.sep, "/")
+
+
 def generate_chunks(
     combined_text: str,
     combined_path: Path,
@@ -354,13 +365,14 @@ def convert(args: argparse.Namespace) -> int:
     source_uuid = source_sha[:12]
     page_count = len(result["layoutParsingResults"])
     artifact_rel = args.combined_name
+    source_ref = manifest_source_reference(input_path, output_dir)
     limitations: list[str] = []
     if not args.download_images:
         limitations.append("images were not downloaded")
     if warnings:
         limitations.extend(warnings)
     manifest = {
-        "source_path": str(input_path),
+        "source_path": source_ref,
         "source_sha256": source_sha,
         "artifact_sha256": artifact_sha,
         "combined": args.combined_name,
@@ -379,7 +391,7 @@ def convert(args: argparse.Namespace) -> int:
         },
         "limitations": limitations,
         # Legacy fields preserved for backward compat.
-        "input": str(input_path),
+        "input": source_ref,
         "api_url": args.api_url,
         "file_type": args.file_type,
         "attempts": attempts,

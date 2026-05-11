@@ -230,7 +230,11 @@ def is_low_signal_metric_line(clean: str) -> bool:
     return False
 
 
-def evidence_rows_from_chunks(chunks: list[dict[str, object]], raw_rel: str) -> list[tuple[str, str, str]]:
+def evidence_rows_from_chunks(
+    chunks: list[dict[str, object]],
+    raw_rel: str,
+    combined_text: str,
+) -> list[tuple[str, str, str]]:
     keywords = re.compile(
         r"(parameter|token|benchmark|score|accuracy|training|model|expert|AIME|MATH|"
         r"HumanEval|GPQA|MMLU|OCR|BLEU|FLOP|%|B\b|M\b|K\b)",
@@ -240,18 +244,37 @@ def evidence_rows_from_chunks(chunks: list[dict[str, object]], raw_rel: str) -> 
     for chunk in chunks:
         if len(rows) >= 4:
             break
-        text = str(chunk.get("text", ""))
+        text = str(chunk.get("text") or chunk.get("snippet") or "")
+        if not text:
+            char_start = chunk.get("char_start")
+            char_end = chunk.get("char_end")
+            if (
+                isinstance(char_start, int)
+                and isinstance(char_end, int)
+                and 0 <= char_start < char_end <= len(combined_text)
+            ):
+                text = combined_text[char_start:char_end]
         if not text or len(text) < 30:
             continue
-        page = chunk.get("page", 0)
-        line_start = chunk.get("line_start", 0)
-        anchor = f"{raw_rel}#L{line_start}"
-        if page:
-            anchor = f"{raw_rel}#page={page}&L{line_start}"
         clean = clean_line(text)
+        if not re.search(r"\d", clean) or not keywords.search(clean):
+            continue
+        if is_low_signal_metric_line(clean):
+            continue
         value = metric_value_match(clean)
         if not value:
             continue
+        heading_path = chunk.get("heading_path", [])
+        if isinstance(heading_path, list):
+            heading = " > ".join(str(part) for part in heading_path if str(part))
+            if heading:
+                clean = f"{heading}: {clean}"
+        page = chunk.get("page")
+        line_start = chunk.get("line_start", 0)
+        if isinstance(page, int):
+            anchor = f"{raw_rel}#page={page}&L{line_start}"
+        else:
+            anchor = f"{raw_rel}#L{line_start}"
         rows.append((clean[:260], value.group(0), anchor))
     return rows
 
@@ -322,7 +345,7 @@ def build_item(vault: Path, source_id: str, combined: Path, today: str, concept_
         limitations.append("no manifest.json found")
 
     if chunks:
-        ev_rows = evidence_rows_from_chunks(chunks, raw_rel)
+        ev_rows = evidence_rows_from_chunks(chunks, raw_rel, text)
         if not ev_rows:
             ev_rows = evidence_rows(lines, raw_rel)
     else:
