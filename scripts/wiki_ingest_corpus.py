@@ -12,7 +12,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import ensure_within, read_text, write_text
+from wiki_common import (
+    LEGACY_PARSER,
+    ensure_within,
+    is_legacy_manifest,
+    is_manifest_complete,
+    is_stale_manifest,
+    load_chunks,
+    load_manifest,
+    read_text,
+    write_text,
+)
 from wiki_source_registry import (
     allocate_source_id,
     find_by_raw_hash,
@@ -59,6 +69,8 @@ class Item:
     abstract: str
     evidence: list[tuple[str, str, str]]
     opening_line: int
+    artifact_status: str  # "complete", "legacy", "stale"
+    manifest_limitations: list[str]
 
 
 def clean_line(line: str) -> str:
@@ -229,6 +241,55 @@ def is_low_signal_metric_line(clean: str) -> bool:
     return False
 
 
+def evidence_rows_from_chunks(
+    chunks: list[dict[str, object]],
+    raw_rel: str,
+    combined_text: str,
+) -> list[tuple[str, str, str]]:
+    keywords = re.compile(
+        r"(parameter|token|benchmark|score|accuracy|training|model|expert|AIME|MATH|"
+        r"HumanEval|GPQA|MMLU|OCR|BLEU|FLOP|%|B\b|M\b|K\b)",
+        re.IGNORECASE,
+    )
+    rows: list[tuple[str, str, str]] = []
+    for chunk in chunks:
+        if len(rows) >= 4:
+            break
+        text = str(chunk.get("text") or chunk.get("snippet") or "")
+        if not text:
+            char_start = chunk.get("char_start")
+            char_end = chunk.get("char_end")
+            if (
+                isinstance(char_start, int)
+                and isinstance(char_end, int)
+                and 0 <= char_start < char_end <= len(combined_text)
+            ):
+                text = combined_text[char_start:char_end]
+        if not text or len(text) < 30:
+            continue
+        clean = clean_line(text)
+        if not re.search(r"\d", clean) or not keywords.search(clean):
+            continue
+        if is_low_signal_metric_line(clean):
+            continue
+        value = metric_value_match(clean)
+        if not value:
+            continue
+        heading_path = chunk.get("heading_path", [])
+        if isinstance(heading_path, list):
+            heading = " > ".join(str(part) for part in heading_path if str(part))
+            if heading:
+                clean = f"{heading}: {clean}"
+        page = chunk.get("page")
+        line_start = chunk.get("line_start", 0)
+        if isinstance(page, int):
+            anchor = f"{raw_rel}#page={page}&L{line_start}"
+        else:
+            anchor = f"{raw_rel}#L{line_start}"
+        rows.append((clean[:260], value.group(0), anchor))
+    return rows
+
+
 def evidence_rows(lines: list[str], raw_rel: str) -> list[tuple[str, str, str]]:
     keywords = re.compile(
         r"(parameter|token|benchmark|score|accuracy|training|model|expert|AIME|MATH|"
@@ -274,6 +335,35 @@ def build_item(vault: Path, source_id: str, combined: Path, today: str, concept_
     arxiv = arxiv_from_name(combined.parent.name)
     abstract, opening_line = abstract_from_lines(lines)
     tags = derive_tags(title, combined.parent.name, abstract)
+
+    artifact_dir = combined.parent
+    manifest = load_manifest(artifact_dir)
+    chunks = load_chunks(artifact_dir)
+    limitations: list[str] = []
+
+    if is_manifest_complete(manifest):
+        artifact_status = "complete"
+        if isinstance(manifest, dict):
+            limitations = list(manifest.get("limitations", []))
+        if is_stale_manifest(manifest, pdf):
+            artifact_status = "stale"
+            limitations.append("source file has changed since last parse")
+    elif is_legacy_manifest(manifest):
+        artifact_status = "legacy"
+        limitations.append("legacy artifact without full manifest contract")
+    else:
+        artifact_status = "legacy"
+        limitations.append("no manifest.json found")
+
+    if chunks:
+        ev_rows = evidence_rows_from_chunks(chunks, raw_rel, text)
+        if not ev_rows:
+            ev_rows = evidence_rows(lines, raw_rel)
+    else:
+        ev_rows = evidence_rows(lines, raw_rel)
+        if artifact_status == "complete":
+            limitations.append("chunks.jsonl missing from complete artifact")
+
     return Item(
         source_id=source_id,
         title=title,
@@ -284,8 +374,10 @@ def build_item(vault: Path, source_id: str, combined: Path, today: str, concept_
         tags=tags,
         concepts=concepts_for_tags(tags, title, abstract, concept_defs),
         abstract=abstract,
-        evidence=evidence_rows(lines, raw_rel),
+        evidence=ev_rows,
         opening_line=opening_line,
+        artifact_status=artifact_status,
+        manifest_limitations=limitations,
     )
 
 
@@ -300,6 +392,7 @@ def source_text(item: Item, status: str, today: str) -> str:
     concepts = ", ".join(f"[[{concept}]]" for concept in item.concepts)
     rows = "\n".join(f"| Reported claim | {value} | as stated in source | {anchor} |" for _claim, value, anchor in item.evidence)
     evidence = "\n".join(f"- {anchor}: {claim}" for claim, _value, anchor in item.evidence)
+    limitation_lines = "\n".join(f"- {lim}" for lim in item.manifest_limitations) if item.manifest_limitations else "- none"
     return f"""---
 id: {item.source_id}
 title: "{safe_title}"
@@ -330,8 +423,13 @@ Evidence:
 
 - paper: {item.pdf_rel}
 - parsed markdown: {item.raw_rel}
+- artifact status: {item.artifact_status}
 - abstract/opening anchor: {item.raw_rel}#L{item.opening_line}
 {evidence}
+
+Artifact limitations:
+
+{limitation_lines}
 
 ## Timeline Position
 

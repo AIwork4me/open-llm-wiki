@@ -623,6 +623,240 @@ def main() -> int:
         if "source_updated" not in kinds:
             raise SystemExit("dashboard actions: source_updated action not generated for recently updated source")
 
+    # --- Artifact contract tests (Issue #68) ---
+    with tempfile.TemporaryDirectory() as tmp:
+        artifact_vault = Path(tmp) / "artifact-vault"
+        shutil.copytree(vault, artifact_vault)
+        raw_dir = artifact_vault / "raw"
+
+        # Fixture 1: Complete artifact
+        complete_dir = raw_dir / "complete_paper_markdown"
+        complete_dir.mkdir(parents=True)
+        (raw_dir / "complete_paper.pdf").write_bytes(b"%PDF-1.4 complete\n")
+        combined_text = (
+            "# Complete Paper\n\n"
+            "Abstract\n\nThis paper has 7B parameters and HumanEval 71%.\n\n"
+            "Results\n\nHumanEval accuracy is 71%.\n"
+        )
+        (complete_dir / "combined.md").write_text(combined_text, encoding="utf-8")
+        import hashlib
+        source_sha = hashlib.sha256(b"%PDF-1.4 complete\n").hexdigest()
+        artifact_sha = hashlib.sha256((complete_dir / "combined.md").read_bytes()).hexdigest()
+        complete_manifest = {
+            "source_path": "raw/complete_paper.pdf",
+            "source_sha256": source_sha,
+            "artifact_sha256": artifact_sha,
+            "combined": "combined.md",
+            "parser": "pdf_to_markdown",
+            "parser_version": "2.0.0",
+            "created_at": "2026-05-09T00:00:00+00:00",
+            "source_mtime": "2026-05-09T00:00:00+00:00",
+            "mime": "application/pdf",
+            "page_count": 1,
+            "anchors": {"pages": True, "lines": True, "tables": False, "figures": False, "equations": False},
+            "limitations": [],
+        }
+        (complete_dir / "manifest.json").write_text(
+            json.dumps(complete_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        metric_text = "This paper has 7B parameters and HumanEval 71%."
+        metric_start = combined_text.index(metric_text)
+        chunks = [
+            {
+                "chunk_id": f"{source_sha[:12]}:00000",
+                "source_uuid": source_sha[:12],
+                "source_id": "",
+                "artifact_path": "combined.md",
+                "heading_path": ["Abstract"],
+                "page": 1,
+                "line_start": 5,
+                "line_end": 5,
+                "char_start": metric_start,
+                "char_end": metric_start + len(metric_text),
+                "kind": "paragraph",
+                "text_hash": hashlib.sha256(metric_text.encode("utf-8")).hexdigest()[:16],
+                "token_count": len(metric_text.split()),
+            },
+        ]
+        (complete_dir / "chunks.jsonl").write_text(
+            "".join(json.dumps(c, ensure_ascii=False) + "\n" for c in chunks), encoding="utf-8"
+        )
+
+        # Fixture 2: Stale artifact (source changed)
+        stale_dir = raw_dir / "stale_paper_markdown"
+        stale_dir.mkdir(parents=True)
+        (raw_dir / "stale_paper.pdf").write_bytes(b"%PDF-1.4 stale CHANGED\n")
+        (stale_dir / "combined.md").write_text("# Stale\n\nOld content.\n", encoding="utf-8")
+        stale_manifest = dict(complete_manifest)
+        stale_manifest["source_path"] = "raw/stale_paper.pdf"
+        stale_manifest["source_sha256"] = hashlib.sha256(b"old content").hexdigest()
+        stale_manifest["artifact_sha256"] = hashlib.sha256((stale_dir / "combined.md").read_bytes()).hexdigest()
+        (stale_dir / "manifest.json").write_text(
+            json.dumps(stale_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        (stale_dir / "chunks.jsonl").write_text("", encoding="utf-8")
+
+        # Fixture 3: Legacy artifact (no manifest)
+        legacy_dir = raw_dir / "legacy_paper_markdown"
+        legacy_dir.mkdir(parents=True)
+        (raw_dir / "legacy_paper.pdf").write_bytes(b"%PDF-1.4 legacy\n")
+        (legacy_dir / "combined.md").write_text("# Legacy\n\nLegacy content.\n", encoding="utf-8")
+
+        # Test: lint should detect stale and legacy
+        lint_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(artifact_vault), "--fail-on", "p2"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        lint_output = lint_result.stdout
+        if "source_sha256 mismatch" not in lint_output:
+            print(lint_output)
+            raise SystemExit("artifact eval did not detect stale source hash")
+        if "legacy artifact" not in lint_output.lower() and "no manifest.json" not in lint_output:
+            print(lint_output)
+            raise SystemExit("artifact eval did not detect legacy artifact")
+        if "complete_paper" in lint_output and "mismatch" in lint_output:
+            print(lint_output)
+            raise SystemExit("artifact eval flagged complete artifact as stale")
+
+        # Test: complete artifact should pass p1 lint
+        p1_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(artifact_vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if "complete_paper" in p1_result.stdout and "mismatch" in p1_result.stdout:
+            print(p1_result.stdout)
+            raise SystemExit("complete artifact should not have P1 findings")
+
+        # Test: corpus ingest with complete artifact
+        ingest_vault = Path(tmp) / "ingest-vault"
+        run([sys.executable, "scripts/wiki_init.py", str(ingest_vault), "--repo-root", str(ROOT)])
+        ingest_raw = ingest_vault / "raw"
+        ingest_dir = ingest_raw / "complete_paper_markdown"
+        ingest_dir.mkdir(parents=True)
+        (ingest_raw / "complete_paper.pdf").write_bytes(b"%PDF-1.4 complete\n")
+        (ingest_dir / "combined.md").write_text(combined_text, encoding="utf-8")
+        (ingest_dir / "manifest.json").write_text(
+            json.dumps(complete_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        (ingest_dir / "chunks.jsonl").write_text(
+            "".join(json.dumps(c, ensure_ascii=False) + "\n" for c in chunks), encoding="utf-8"
+        )
+        ingest_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(ingest_vault), "--today", "2026-05-09"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if ingest_result.returncode != 0:
+            print(ingest_result.stdout)
+            raise SystemExit("artifact corpus ingest failed")
+        source_page = (ingest_vault / "sources" / "LLM-0001.md").read_text(encoding="utf-8")
+        if "artifact status: complete" not in source_page:
+            print(source_page)
+            raise SystemExit("ingested source page does not record complete artifact status")
+        if "raw/complete_paper_markdown/combined.md#page=1&L5" not in source_page:
+            print(source_page)
+            raise SystemExit("ingested source page evidence did not use chunk page/line anchor")
+        if "Abstract: This paper has 7B parameters and HumanEval 71%." not in source_page:
+            print(source_page)
+            raise SystemExit("ingested source page evidence did not use chunk heading context")
+
+        # Test: corpus ingest with legacy artifact
+        legacy_vault = Path(tmp) / "legacy-vault"
+        run([sys.executable, "scripts/wiki_init.py", str(legacy_vault), "--repo-root", str(ROOT)])
+        legacy_raw = legacy_vault / "raw"
+        legacy_md_dir = legacy_raw / "legacy_paper_markdown"
+        legacy_md_dir.mkdir(parents=True)
+        (legacy_raw / "legacy_paper.pdf").write_bytes(b"%PDF-1.4 legacy\n")
+        (legacy_md_dir / "combined.md").write_text("# Legacy\n\n7B parameters for code. HumanEval 75%.\n", encoding="utf-8")
+        legacy_ingest = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(legacy_vault), "--today", "2026-05-09"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if legacy_ingest.returncode != 0:
+            print(legacy_ingest.stdout)
+            raise SystemExit("legacy artifact corpus ingest failed")
+        legacy_source = (legacy_vault / "sources" / "LLM-0001.md").read_text(encoding="utf-8")
+        if "artifact status: legacy" not in legacy_source:
+            print(legacy_source)
+            raise SystemExit("legacy artifact not recorded in source page")
+
+        # Test: claim evidence can link to chunk/page/line
+        claims_vault = Path(tmp) / "claims-artifact-vault"
+        shutil.copytree(vault, claims_vault)
+        claims_raw = claims_vault / "raw"
+        claims_md_dir = claims_raw / "attention_paper_markdown"
+        claims_md_dir.mkdir(parents=True)
+        (claims_raw / "attention_paper.pdf").write_bytes(b"%PDF-1.4 attention\n")
+        (claims_md_dir / "combined.md").write_text(
+            "# Attention Paper\n\nAbstract\n\nThe model scores 27.3 BLEU on WMT.\n\n"
+            "Results\n\nBase model BLEU 27.3 against prior 26.\n", encoding="utf-8"
+        )
+        claim_manifest = dict(complete_manifest)
+        claim_manifest["source_path"] = "raw/attention_paper.pdf"
+        claim_manifest["source_sha256"] = hashlib.sha256(b"%PDF-1.4 attention\n").hexdigest()
+        claim_manifest["artifact_sha256"] = hashlib.sha256(
+            (claims_md_dir / "combined.md").read_text().encode("utf-8")
+        ).hexdigest()
+        (claims_md_dir / "manifest.json").write_text(
+            json.dumps(claim_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        claim_chunk = {
+            "chunk_id": "abc123:00003",
+            "source_uuid": "abc123",
+            "source_id": "LLM-0001",
+            "artifact_path": "combined.md",
+            "heading_path": ["Results"],
+            "page": 0,
+            "line_start": 6,
+            "line_end": 6,
+            "char_start": 50,
+            "char_end": 90,
+            "kind": "paragraph",
+            "text_hash": "abc1234",
+            "token_count": 8,
+        }
+        (claims_md_dir / "chunks.jsonl").write_text(
+            json.dumps(claim_chunk, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        # Write a source page that references the raw artifact.
+        (claims_vault / "sources" / "LLM-0001.md").write_text(
+            (claims_vault / "sources" / "LLM-0001.md").read_text(encoding="utf-8").replace(
+                "- sections: model architecture and results table",
+                "- sections: model architecture and results table\n"
+                "- parsed: raw/attention_paper_markdown/combined.md#L6",
+            ),
+            encoding="utf-8",
+        )
+        claims_result = subprocess.run(
+            [sys.executable, "scripts/wiki_claims.py", str(claims_vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if claims_result.returncode != 0:
+            print(claims_result.stdout)
+            raise SystemExit("artifact claims extraction failed")
+
+        # Test: legacy artifact not treated as complete
+        from wiki_common import is_manifest_complete, is_legacy_manifest, load_manifest
+        assert is_manifest_complete(complete_manifest)
+        assert not is_legacy_manifest(complete_manifest)
+        assert is_legacy_manifest({"input": "old"})
+        assert not is_manifest_complete(None)
+        assert not is_manifest_complete({})
+
     # --- Claim Ledger Tests (Issue #69) ---
     with tempfile.TemporaryDirectory() as td:
         q_vault = Path(td) / "claim-ledger-vault"

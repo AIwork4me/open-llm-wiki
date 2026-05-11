@@ -10,7 +10,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import SOURCE_ID_RE, ensure_within, json_dump, read_text, write_text
+from wiki_common import (
+    SOURCE_ID_RE,
+    ensure_within,
+    json_dump,
+    load_chunks,
+    load_manifest,
+    is_manifest_complete,
+    is_legacy_manifest,
+    read_text,
+    write_text,
+)
 
 VALID_VERDICTS = frozenset({"unreviewed", "supported", "weak", "contradicted", "retracted", "stale"})
 EVIDENCE_QUOTE_MAX_LEN = 300
@@ -176,6 +186,11 @@ def check_claims(vault: Path, claims: list[dict[str, object]]) -> list[Issue]:
         if not path.exists():
             issues.append(Issue("P1", subject, f"evidence path does not exist: {evidence}"))
             continue
+        # Check artifact manifest status for raw evidence paths.
+        if evidence.startswith("raw/") and path.parent.name.endswith("_markdown"):
+            artifact_manifest = load_manifest(path.parent)
+            if is_legacy_manifest(artifact_manifest):
+                issues.append(Issue("P2", subject, f"evidence points to a legacy artifact without full manifest: {path.parent.name}"))
         if not heading_exists(path, fragment):
             issues.append(Issue("P1", subject, f"evidence heading anchor does not exist: {evidence}"))
             continue

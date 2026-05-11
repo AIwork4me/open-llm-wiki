@@ -917,6 +917,89 @@ def check_pdf_to_markdown_http_errors() -> None:
         server.server_close()
 
 
+def check_pdf_to_markdown_manifest_paths() -> None:
+    class SuccessHandler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            body = {
+                "result": {
+                    "layoutParsingResults": [
+                        {
+                            "markdown": {
+                                "text": "# Paper\n\nThe model reports 7B parameters and HumanEval 71%.",
+                                "images": {},
+                            },
+                            "outputImages": {},
+                        }
+                    ]
+                }
+            }
+            data = json.dumps(body).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args: object) -> None:
+            return
+
+    server = HTTPServer(("127.0.0.1", 0), SuccessHandler)
+    server.timeout = 10
+    thread = threading.Thread(target=server.handle_request, daemon=True)
+    thread.start()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vault = root / "vault"
+            raw = vault / "raw"
+            raw.mkdir(parents=True)
+            input_path = raw / "paper.pdf"
+            output_dir = raw / "paper_markdown"
+            input_path.write_bytes(b"%PDF-1.4 paper\n")
+            env = os.environ.copy()
+            env["OPEN_LLM_WIKI_LAYOUT_TOKEN"] = "fake"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/pdf_to_markdown.py",
+                    str(input_path),
+                    "--output",
+                    str(output_dir),
+                    "--api-url",
+                    f"http://127.0.0.1:{server.server_address[1]}/layout",
+                    "--retries",
+                    "0",
+                    "--timeout",
+                    "5",
+                    "--no-download-images",
+                ],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            if result.returncode != 0:
+                print(result.stdout)
+                fail("pdf_to_markdown.py manifest path test failed")
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("source_path") != "raw/paper.pdf":
+                print(manifest)
+                fail("pdf_to_markdown.py manifest source_path is not vault-relative")
+            if manifest.get("input") != "raw/paper.pdf":
+                print(manifest)
+                fail("pdf_to_markdown.py legacy input field leaked an absolute path")
+            if (
+                Path(str(manifest.get("source_path", ""))).is_absolute()
+                or Path(str(manifest.get("input", ""))).is_absolute()
+            ):
+                print(manifest)
+                fail("pdf_to_markdown.py manifest contains an absolute local path")
+    finally:
+        thread.join(timeout=5)
+        server.server_close()
+
+
 def expect_command_failure(command: list[str], expected: str, message: str, cwd: Path = ROOT) -> str:
     result = subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if result.returncode == 0:
@@ -1723,6 +1806,220 @@ def check_corpus_ingest_resume_continues() -> None:
             fail("resumed corpus vault failed p1 lint")
 
 
+def check_artifact_contract_lint() -> None:
+    """Test that wiki_lint validates manifest/chunk contract."""
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("artifact lint test vault initialization failed")
+
+        raw_dir = vault / "raw"
+        artifact_dir = raw_dir / "test_paper_markdown"
+        artifact_dir.mkdir(parents=True)
+        (raw_dir / "test_paper.pdf").write_bytes(b"%PDF-1.4 test\n")
+        (artifact_dir / "combined.md").write_text("# Test\n\nContent with 7B parameters.\n", encoding="utf-8")
+
+        # Test 1: No manifest -> legacy P2
+        no_manifest_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if no_manifest_result.returncode != 0:
+            print(no_manifest_result.stdout)
+            fail("artifact lint failed on vault with no manifest (should be P2)")
+        if "no manifest.json" not in no_manifest_result.stdout and "legacy artifact" not in no_manifest_result.stdout.lower():
+            print(no_manifest_result.stdout)
+            fail("artifact lint did not warn about missing manifest")
+
+        # Test 2: Complete manifest passes
+        import hashlib
+        combined_text = "# Test\n\nContent with 7B parameters.\n"
+        manifest = {
+            "source_path": "raw/test_paper.pdf",
+            "source_sha256": hashlib.sha256(b"%PDF-1.4 test\n").hexdigest(),
+            "artifact_sha256": hashlib.sha256((artifact_dir / "combined.md").read_bytes()).hexdigest(),
+            "combined": "combined.md",
+            "parser": "test-parser",
+            "parser_version": "1.0.0",
+            "created_at": "2026-05-09T00:00:00+00:00",
+            "source_mtime": "2026-05-09T00:00:00+00:00",
+            "mime": "application/pdf",
+            "page_count": 1,
+            "anchors": {"pages": True, "lines": True, "tables": False, "figures": False, "equations": False},
+            "limitations": [],
+        }
+        (artifact_dir / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        good_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if good_result.returncode != 0:
+            print(good_result.stdout)
+            fail("artifact lint failed on complete manifest")
+
+        # Test 3: Stale source hash -> P1
+        (raw_dir / "test_paper.pdf").write_bytes(b"%PDF-1.4 CHANGED\n")
+        stale_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if stale_result.returncode == 0:
+            print(stale_result.stdout)
+            fail("artifact lint did not detect stale source hash")
+        if "source_sha256 mismatch" not in stale_result.stdout:
+            print(stale_result.stdout)
+            fail("artifact lint did not report source hash mismatch")
+
+        # Test 4: Missing required manifest fields -> P1
+        (raw_dir / "test_paper.pdf").write_bytes(b"%PDF-1.4 test\n")
+        partial_manifest = {"source_path": "raw/test_paper.pdf"}
+        (artifact_dir / "manifest.json").write_text(
+            json.dumps(partial_manifest) + "\n", encoding="utf-8"
+        )
+        partial_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if partial_result.returncode == 0:
+            print(partial_result.stdout)
+            fail("artifact lint did not detect missing manifest fields")
+        if "missing required fields" not in partial_result.stdout:
+            print(partial_result.stdout)
+            fail("artifact lint did not report missing manifest fields")
+
+        # Test 5: Duplicate chunk_id -> P1
+        (artifact_dir / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        dup_chunk = {
+            "chunk_id": "abc:00001",
+            "source_uuid": "abc",
+            "source_id": "",
+            "artifact_path": "combined.md",
+            "heading_path": [],
+            "page": 0,
+            "line_start": 1,
+            "line_end": 1,
+            "char_start": 0,
+            "char_end": 10,
+            "kind": "paragraph",
+            "text_hash": "abc",
+            "token_count": 2,
+        }
+        (artifact_dir / "chunks.jsonl").write_text(
+            json.dumps(dup_chunk) + "\n" + json.dumps(dup_chunk) + "\n",
+            encoding="utf-8",
+        )
+        dup_result = subprocess.run(
+            [sys.executable, "scripts/wiki_lint.py", str(vault), "--fail-on", "p1"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if dup_result.returncode == 0:
+            print(dup_result.stdout)
+            fail("artifact lint did not detect duplicate chunk_id")
+        if "duplicate chunk_id" not in dup_result.stdout:
+            print(dup_result.stdout)
+            fail("artifact lint did not report duplicate chunk_id")
+
+
+def check_artifact_manifest_schema() -> None:
+    """Test manifest/chunk schema constants and helpers."""
+    from wiki_common import (
+        MANIFEST_REQUIRED_FIELDS,
+        CHUNK_REQUIRED_FIELDS,
+        MANIFEST_ANCHOR_FIELDS,
+        is_manifest_complete,
+        is_legacy_manifest,
+        is_stale_manifest,
+        load_manifest,
+        load_chunks,
+    )
+    if "source_path" not in MANIFEST_REQUIRED_FIELDS:
+        fail("MANIFEST_REQUIRED_FIELDS missing source_path")
+    if "chunk_id" not in CHUNK_REQUIRED_FIELDS:
+        fail("CHUNK_REQUIRED_FIELDS missing chunk_id")
+    if "pages" not in MANIFEST_ANCHOR_FIELDS:
+        fail("MANIFEST_ANCHOR_FIELDS missing pages")
+    if not is_manifest_complete({
+        "source_path": "", "source_sha256": "", "artifact_sha256": "",
+        "combined": "", "parser": "", "parser_version": "", "created_at": "",
+        "source_mtime": "", "mime": "", "page_count": 0, "anchors": {},
+        "limitations": [],
+    }):
+        fail("is_manifest_complete rejected a manifest with all required fields")
+    if is_manifest_complete({"source_path": ""}):
+        fail("is_manifest_complete accepted a manifest with missing fields")
+    if is_manifest_complete(None):
+        fail("is_manifest_complete accepted None")
+    if not is_legacy_manifest({"input": "old"}):
+        fail("is_legacy_manifest rejected a partial manifest")
+    if is_legacy_manifest(None):
+        fail("is_legacy_manifest accepted None")
+    if is_legacy_manifest({
+        "source_path": "", "source_sha256": "", "artifact_sha256": "",
+        "combined": "", "parser": "", "parser_version": "", "created_at": "",
+        "source_mtime": "", "mime": "", "page_count": 0, "anchors": {},
+        "limitations": [],
+    }):
+        fail("is_legacy_manifest accepted a complete manifest")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "schema-test"
+        artifact_dir = vault / "raw" / "test_markdown"
+        artifact_dir.mkdir(parents=True)
+        (artifact_dir / "combined.md").write_text("test\n", encoding="utf-8")
+        assert load_manifest(artifact_dir) is None
+        (artifact_dir / "manifest.json").write_text("not json", encoding="utf-8")
+        assert load_manifest(artifact_dir) is None
+        (artifact_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        m = load_manifest(artifact_dir)
+        assert isinstance(m, dict)
+
+        assert load_chunks(artifact_dir) == []
+        (artifact_dir / "chunks.jsonl").write_text(
+            '{"chunk_id":"x:00001"}\nbad json\n{"chunk_id":"x:00002"}\n',
+            encoding="utf-8",
+        )
+        chunks = load_chunks(artifact_dir)
+        assert len(chunks) == 2
+
+        # is_stale_manifest
+        source = vault / "raw" / "test.pdf"
+        source.write_bytes(b"pdf")
+        import hashlib
+        fresh_manifest = {"source_sha256": hashlib.sha256(b"pdf").hexdigest()}
+        assert not is_stale_manifest(fresh_manifest, source)
+        stale_manifest = {"source_sha256": "wrong"}
+        assert is_stale_manifest(stale_manifest, source)
+        empty_sha_manifest = {"source_sha256": ""}
+        assert is_stale_manifest(empty_sha_manifest, source)
+
+
 def check_dashboard_action_model() -> None:
     """Verify dashboard action model generation, persistence, and resolve/ignore."""
     import datetime as dt
@@ -1980,6 +2277,7 @@ def main() -> None:
     check_pdf_to_markdown_help()
     run_runtime_checks()
     check_pdf_to_markdown_http_errors()
+    check_pdf_to_markdown_manifest_paths()
     check_pdf_corpus_to_markdown_progress_log()
     check_writeback_semantic_qa_gate()
     check_safety_boundaries()
@@ -1991,6 +2289,8 @@ def main() -> None:
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
     check_corpus_ingest_resume_continues()
+    check_artifact_contract_lint()
+    check_artifact_manifest_schema()
     check_dashboard_action_model()
     check_claim_ledger_schema()
     check_claim_ledger_verdict_synthesis()

@@ -10,7 +10,18 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from wiki_common import WIKILINK_RE, ensure_within, json_dump, parse_frontmatter, read_text, rel, write_text
+from wiki_common import (
+    WIKILINK_RE,
+    ensure_within,
+    json_dump,
+    load_chunks,
+    load_manifest,
+    is_manifest_complete,
+    parse_frontmatter,
+    read_text,
+    rel,
+    write_text,
+)
 
 
 NUMBER_RE = re.compile(r"([-+]?\d+(?:,\d{3})*(?:\.\d+)?)\s*([A-Za-z%]+)?")
@@ -241,7 +252,48 @@ def extract_claims(vault: Path) -> list[dict[str, object]]:
         if first:
             claims.append(first)
         claims.extend(metric_claims(source_id, title, body, concepts, relpath))
+    # Attach raw chunk anchors where available.
+    for claim in claims:
+        evidence = str(claim.get("evidence", ""))
+        chunk_ref = _resolve_chunk_for_evidence(vault, evidence)
+        if chunk_ref:
+            claim["chunk_anchor"] = chunk_ref
+        manifest_note = _manifest_status_note(vault, evidence)
+        if manifest_note:
+            claim["evidence_status"] = manifest_note
     return claims
+
+
+def _resolve_chunk_for_evidence(vault: Path, evidence: str) -> dict[str, object] | None:
+    if not evidence.startswith("raw/"):
+        return None
+    parts = evidence.split("#", 1)
+    raw_rel = parts[0]
+    raw_path = (vault / raw_rel).resolve()
+    try:
+        raw_path.relative_to(vault.resolve())
+    except ValueError:
+        return None
+    artifact_dir = raw_path.parent
+    chunks = load_chunks(artifact_dir)
+    if not chunks:
+        return None
+    return {"artifact_dir": str(artifact_dir.name), "total_chunks": len(chunks)}
+
+
+def _manifest_status_note(vault: Path, evidence: str) -> str:
+    if not evidence.startswith("raw/"):
+        return ""
+    raw_path = (vault / evidence.split("#")[0]).resolve()
+    try:
+        raw_path.relative_to(vault.resolve())
+    except ValueError:
+        return ""
+    artifact_dir = raw_path.parent
+    manifest = load_manifest(artifact_dir)
+    if is_manifest_complete(manifest):
+        return "complete"
+    return "legacy"
 
 
 def mark_stale_claims(claims_path: Path, stale_source_ids: set[str]) -> int:

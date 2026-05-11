@@ -11,6 +11,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -19,6 +20,10 @@ from urllib.parse import urlparse
 import requests
 
 from wiki_common import write_text
+
+
+PARSER_NAME = "pdf_to_markdown"
+PARSER_VERSION = "2.0.0"
 
 
 DEFAULT_API_URL = "https://q6mbb0r0t8m9q4pf.aistudio-app.com/layout-parsing"
@@ -173,6 +178,110 @@ def find_suspicious_text(text: str, label: str) -> list[str]:
     return warnings
 
 
+def source_file_sha256(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def manifest_source_reference(input_path: Path, output_dir: Path) -> str:
+    raw_dir = output_dir.parent
+    if raw_dir.name == "raw":
+        vault = raw_dir.parent
+        try:
+            return input_path.relative_to(vault).as_posix()
+        except ValueError:
+            pass
+    return os.path.relpath(input_path, output_dir).replace(os.sep, "/")
+
+
+def generate_chunks(
+    combined_text: str,
+    combined_path: Path,
+    source_uuid: str,
+    source_id: str,
+    artifact_rel: str,
+) -> list[dict[str, object]]:
+    import hashlib
+    lines = combined_text.splitlines()
+    chunks: list[dict[str, object]] = []
+    char_offset = 0
+    page = 0
+    current_heading_path: list[str] = []
+    heading_re = re.compile(r"^(#{1,6})\s+(.+?)(?:\s+#*)\s*$")
+    page_break_re = re.compile(r"^---+$")
+    chunk_index = 0
+    buf_lines: list[str] = []
+    buf_start_line = 1
+    buf_start_char = 0
+
+    def flush() -> None:
+        nonlocal chunk_index, buf_lines, buf_start_line, buf_start_char
+        if not buf_lines:
+            return
+        text = "\n".join(buf_lines)
+        if not text.strip():
+            buf_lines = []
+            buf_start_line = len(lines) + 1
+            buf_start_char = char_offset
+            return
+        text_h = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        token_count = max(1, len(text.split()))
+        chunks.append({
+            "chunk_id": f"{source_uuid}:{chunk_index:05d}",
+            "source_uuid": source_uuid,
+            "source_id": source_id,
+            "artifact_path": artifact_rel,
+            "heading_path": list(current_heading_path),
+            "page": page,
+            "line_start": buf_start_line,
+            "line_end": buf_start_line + len(buf_lines) - 1,
+            "char_start": buf_start_char,
+            "char_end": buf_start_char + len(text),
+            "kind": "paragraph",
+            "text_hash": text_h,
+            "token_count": token_count,
+        })
+        chunk_index += 1
+        buf_lines = []
+
+    for i, line in enumerate(lines, 1):
+        hm = heading_re.match(line)
+        if hm:
+            flush()
+            level = len(hm.group(1))
+            title = hm.group(2).strip()
+            current_heading_path = current_heading_path[: level - 1] + [title]
+            buf_start_line = i
+            buf_start_char = char_offset
+            buf_lines = [line]
+            flush()
+            char_offset += len(line) + 1
+            continue
+        if page_break_re.match(line.strip()):
+            flush()
+            page += 1
+            char_offset += len(line) + 1
+            continue
+        if not line.strip():
+            if buf_lines:
+                flush()
+            buf_start_line = i + 1
+            buf_start_char = char_offset + len(line) + 1
+            char_offset += len(line) + 1
+            continue
+        if not buf_lines:
+            buf_start_line = i
+            buf_start_char = char_offset
+        buf_lines.append(line)
+        char_offset += len(line) + 1
+    flush()
+    return chunks
+
+
 def convert(args: argparse.Namespace) -> int:
     input_path = args.input.resolve()
     if not input_path.exists():
@@ -247,20 +356,59 @@ def convert(args: argparse.Namespace) -> int:
     if warnings and args.fail_on_suspicious_text:
         raise SystemExit("suspicious text tokens found in API output")
 
+    import hashlib
+    from datetime import datetime, timezone
+    from wiki_common import file_sha256
+
+    source_sha = source_file_sha256(input_path)
+    artifact_sha = file_sha256(combined)
+    source_uuid = source_sha[:12]
+    page_count = len(result["layoutParsingResults"])
+    artifact_rel = args.combined_name
+    source_ref = manifest_source_reference(input_path, output_dir)
+    limitations: list[str] = []
+    if not args.download_images:
+        limitations.append("images were not downloaded")
+    if warnings:
+        limitations.extend(warnings)
     manifest = {
-        "input": str(input_path),
+        "source_path": source_ref,
+        "source_sha256": source_sha,
+        "artifact_sha256": artifact_sha,
+        "combined": args.combined_name,
+        "parser": PARSER_NAME,
+        "parser_version": PARSER_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source_mtime": datetime.fromtimestamp(input_path.stat().st_mtime, timezone.utc).isoformat(),
+        "mime": "application/pdf",
+        "page_count": page_count,
+        "anchors": {
+            "pages": True,
+            "lines": True,
+            "tables": True,
+            "figures": args.download_images,
+            "equations": False,
+        },
+        "limitations": limitations,
+        # Legacy fields preserved for backward compat.
+        "input": source_ref,
         "api_url": args.api_url,
         "file_type": args.file_type,
         "attempts": attempts,
         "documents": markdown_paths,
-        "combined": str(combined),
         "download_images": args.download_images,
         "warnings": warnings,
     }
     write_text(output_dir / "manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
 
+    chunks = generate_chunks(combined_text, combined, source_uuid, "", artifact_rel)
+    chunks_path = output_dir / "chunks.jsonl"
+    chunks_text = "".join(json.dumps(c, ensure_ascii=False) + "\n" for c in chunks)
+    write_text(chunks_path, chunks_text)
+
     print(f"combined markdown: {combined}")
     print(f"manifest: {output_dir / 'manifest.json'}")
+    print(f"chunks: {chunks_path} ({len(chunks)} chunks)")
     return 0
 
 
