@@ -1538,7 +1538,7 @@ def check_corpus_ingest_registry_raw_artifact_contract() -> None:
             print(rows)
             fail("registry raw/artifact contract missing paper_a row")
         expected_raw_hash = hashlib.sha256(raw_bytes).hexdigest()
-        expected_artifact_hash = hashlib.sha256(artifact_text.encode("utf-8")).hexdigest()
+        expected_artifact_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
         if row.get("raw_path") != "raw/paper_a.pdf":
             print(row)
             fail("registry raw_path points to parser artifact instead of original PDF")
