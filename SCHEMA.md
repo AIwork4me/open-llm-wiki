@@ -249,13 +249,17 @@ Optional fields:
 - `duplicate_of`: `source_id` of the original when this row is a duplicate
 - `last_error`: error message when status is `failed`
 - `title`, `arxiv`, `doi`, `sha256`, `title_key`: discovery metadata
-- `kind`: `raw`, `source`, or `arxiv`
+- `kind`: `raw`, `source`, `arxiv`, or `artifact_only`
+- `artifact_path`: relative path to a parser artifact such as
+  `raw/<source>_markdown/combined.md`
+- `artifact_hash`: SHA-256 of the parser artifact
+- `artifact_status`: parser artifact state such as `parsed` or `artifact_only`
 - `updated`, `created`: timestamps
 - `tags`, `concepts`: extracted metadata
 
 Valid statuses:
 `candidate`, `queued`, `parsed`, `chunked`, `drafted`, `qa_passed`,
-`published`, `stale`, `failed`, `archived`
+`published`, `stale`, `blocked`, `failed`, `archived`
 
 Deduplication keys include:
 

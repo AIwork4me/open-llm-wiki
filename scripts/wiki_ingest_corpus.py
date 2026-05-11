@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -466,6 +467,139 @@ def merge_index(vault: Path, items: list[Item], concept_items: dict[str, list[It
     write_text(index_path, text.rstrip() + "\n")
 
 
+def original_source_for_artifact(vault: Path, combined: Path) -> tuple[Path | None, str]:
+    stem = combined.parent.name.removesuffix("_markdown")
+    for suffix in (".pdf", ".md", ".txt"):
+        candidate = vault / "raw" / f"{stem}{suffix}"
+        if candidate.exists() and candidate.is_file():
+            return candidate, candidate.relative_to(vault).as_posix()
+    return None, f"raw/{stem}.pdf"
+
+
+def find_registry_row_for_artifact(
+    rows: list[dict[str, object]],
+    raw_rel: str,
+    artifact_rel: str,
+) -> dict[str, object] | None:
+    for row in rows:
+        if (
+            row.get("raw_path") == raw_rel
+            or row.get("artifact_path") == artifact_rel
+            or row.get("raw_path") == artifact_rel
+        ):
+            return row
+    return None
+
+
+def ensure_registry_identity(row: dict[str, object], state_dir: Path, today: str) -> None:
+    if not row.get("source_uuid"):
+        row["source_uuid"] = str(uuid.uuid4())
+    if not row.get("source_id"):
+        row["source_id"] = allocate_source_id(state_dir)
+    if not row.get("created"):
+        row["created"] = today
+
+
+def upsert_artifact_registry_entry(
+    registry_path: Path,
+    state_dir: Path,
+    rows: list[dict[str, object]],
+    vault: Path,
+    combined: Path,
+    today: str,
+) -> list[dict[str, object]]:
+    artifact_rel = combined.relative_to(vault).as_posix()
+    artifact_hash = raw_hash(combined)
+    source_file, raw_rel = original_source_for_artifact(vault, combined)
+    stem = combined.parent.name.removesuffix("_markdown")
+    existing = find_registry_row_for_artifact(rows, raw_rel, artifact_rel)
+
+    if source_file is None:
+        if existing is None:
+            existing = {
+                "created": today,
+            }
+            rows.append(existing)
+        ensure_registry_identity(existing, state_dir, today)
+        existing.update(
+            {
+                "raw_path": raw_rel,
+                "raw_hash": "",
+                "artifact_path": artifact_rel,
+                "artifact_hash": artifact_hash,
+                "artifact_status": "artifact_only",
+                "status": "blocked",
+                "kind": "artifact_only",
+                "title": stem.replace("_", " "),
+                "arxiv": arxiv_from_name(combined.parent.name),
+                "updated": today,
+                "last_error": "original raw evidence file is missing",
+            }
+        )
+        save_registry(registry_path, rows)
+        return load_registry(registry_path)
+
+    source_hash = raw_hash(source_file)
+    if existing is None:
+        duplicate = find_by_raw_hash(rows, source_hash)
+        if duplicate is not None:
+            ensure_registry_identity(duplicate, state_dir, today)
+            existing = {
+                "source_uuid": uuid.uuid4().hex,
+                "source_id": allocate_source_id(state_dir),
+                "raw_hash": source_hash,
+                "raw_path": raw_rel,
+                "artifact_path": artifact_rel,
+                "artifact_hash": artifact_hash,
+                "artifact_status": "parsed",
+                "status": "archived",
+                "duplicate_of": duplicate["source_id"],
+                "title": stem.replace("_", " "),
+                "kind": "raw",
+                "created": today,
+                "updated": today,
+            }
+            rows.append(existing)
+            save_registry(registry_path, rows)
+            return load_registry(registry_path)
+        register_raw(
+            registry_path,
+            state_dir,
+            raw_path=raw_rel,
+            raw_file=source_file,
+            title=stem.replace("_", " "),
+            arxiv=arxiv_from_name(combined.parent.name),
+            kind="raw",
+        )
+        rows = load_registry(registry_path)
+        existing = find_registry_row_for_artifact(rows, raw_rel, artifact_rel)
+        if existing is None:
+            existing = find_by_raw_path(rows, raw_rel)
+    if existing is None:
+        raise SystemExit(f"failed to create registry row for {raw_rel}")
+
+    ensure_registry_identity(existing, state_dir, today)
+    existing.update(
+        {
+            "raw_path": raw_rel,
+            "raw_hash": source_hash,
+            "artifact_path": artifact_rel,
+            "artifact_hash": artifact_hash,
+            "artifact_status": "parsed",
+            "kind": "raw",
+            "title": stem.replace("_", " "),
+            "arxiv": arxiv_from_name(combined.parent.name),
+            "updated": today,
+        }
+    )
+    if existing.get("status") == "blocked":
+        existing["status"] = "candidate"
+    if existing.get("last_error") == "original raw evidence file is missing":
+        existing.pop("last_error", None)
+    save_registry(registry_path, rows)
+    return load_registry(registry_path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Ingest raw/*_markdown/combined.md files into source pages.",
@@ -513,54 +647,18 @@ def main() -> int:
 
     registry_path = ensure_within(dirs["_state"] / "source-registry.jsonl", dirs["_state"], "registry must stay under _state/")
 
-    # Ensure every raw file has a registry entry with a stable source_id
+    # Ensure every parsed artifact is linked to an original raw evidence file
+    # with a stable source_id. The artifact must not replace raw identity.
     registry_rows = load_registry(registry_path)
     for combined in combined_files:
-        raw_rel = combined.relative_to(vault).as_posix()
-        stem = combined.parent.name.removesuffix("_markdown")
-        pdf_path = vault / "raw" / f"{stem}.pdf"
-        pdf_rel = pdf_path.relative_to(vault).as_posix() if pdf_path.exists() else f"raw/{stem}.pdf"
-        existing = find_by_raw_path(registry_rows, raw_rel)
-        if existing is None:
-            h = raw_hash(combined)
-            dup = find_by_raw_hash(registry_rows, h)
-            if dup is not None:
-                # Duplicate raw content: register as archived pointing to original
-                from wiki_source_registry import mark_duplicate as _mark_dup
-                dup_uuid = existing
-                source_uuid_new = __import__("uuid").uuid4().hex
-                now_str = args.today
-                source_id_new = allocate_source_id(dirs["_state"])
-                new_row = {
-                    "source_uuid": source_uuid_new,
-                    "source_id": source_id_new,
-                    "raw_hash": h,
-                    "raw_path": raw_rel,
-                    "status": "archived",
-                    "duplicate_of": dup["source_id"],
-                    "title": stem.replace("_", " "),
-                    "kind": "raw",
-                    "created": now_str,
-                    "updated": now_str,
-                }
-                registry_rows.append(new_row)
-            else:
-                reg = register_raw(
-                    registry_path, dirs["_state"],
-                    raw_path=raw_rel,
-                    raw_file=combined,
-                    title=stem.replace("_", " "),
-                    arxiv=arxiv_from_name(combined.parent.name),
-                    kind="raw",
-                )
-                registry_rows = load_registry(registry_path)
-        else:
-            # Update hash if file changed
-            h = raw_hash(combined)
-            if existing.get("raw_hash") != h:
-                existing["raw_hash"] = h
-                existing["updated"] = args.today
-                save_registry(registry_path, registry_rows)
+        registry_rows = upsert_artifact_registry_entry(
+            registry_path,
+            dirs["_state"],
+            registry_rows,
+            vault,
+            combined,
+            args.today,
+        )
 
     save_registry(registry_path, registry_rows)
     registry_rows = load_registry(registry_path)
@@ -568,9 +666,12 @@ def main() -> int:
     items: list[Item] = []
     concept_items: dict[str, list[Item]] = defaultdict(list)
     for combined in combined_files:
-        raw_rel = combined.relative_to(vault).as_posix()
-        reg_row = find_by_raw_path(registry_rows, raw_rel)
+        artifact_rel = combined.relative_to(vault).as_posix()
+        _source_file, raw_rel = original_source_for_artifact(vault, combined)
+        reg_row = find_registry_row_for_artifact(registry_rows, raw_rel, artifact_rel)
         if reg_row is None:
+            continue
+        if reg_row.get("status") == "blocked" or reg_row.get("kind") == "artifact_only":
             continue
         if reg_row.get("duplicate_of"):
             continue
@@ -593,7 +694,17 @@ def main() -> int:
                     ensure_within(dirs["qa-reports"] / f"{source_id}-contradiction.md", dirs["qa-reports"], "QA output must stay under qa-reports/"),
                     contradiction_text(item, args.today),
                 )
-                update_status(registry_path, reg_row["source_uuid"], "published", kind="source", tags=item.tags, concepts=item.concepts)
+                update_status(
+                    registry_path,
+                    reg_row["source_uuid"],
+                    "published",
+                    kind="source",
+                    artifact_path=artifact_rel,
+                    artifact_hash=raw_hash(combined),
+                    artifact_status="parsed",
+                    tags=item.tags,
+                    concepts=item.concepts,
+                )
                 for concept in item.concepts:
                     concept_items[concept].append(item)
             else:

@@ -1489,6 +1489,80 @@ def check_source_discovery_arxiv_filename() -> None:
             fail("source discovery did not extract arXiv ID from filename")
 
 
+def check_corpus_ingest_registry_raw_artifact_contract() -> None:
+    import hashlib
+
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("registry raw/artifact contract vault initialization failed")
+        raw_pdf = vault / "raw" / "paper_a.pdf"
+        artifact = vault / "raw" / "paper_a_markdown" / "combined.md"
+        orphan_artifact = vault / "raw" / "orphan_markdown" / "combined.md"
+        artifact.parent.mkdir(parents=True)
+        orphan_artifact.parent.mkdir(parents=True)
+        raw_bytes = b"%PDF-1.4 paper a\n"
+        artifact_text = (
+            "# Paper A\n\n"
+            "Abstract\n"
+            "Paper A reports 7B parameters and HumanEval 75% against a 60% baseline.\n"
+        )
+        raw_pdf.write_bytes(raw_bytes)
+        artifact.write_text(artifact_text, encoding="utf-8")
+        orphan_artifact.write_text("# Orphan Artifact\n\nThis parser output has no raw source file.\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(vault), "--today", "2026-05-03"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            print(result.stdout)
+            fail("registry raw/artifact contract ingest failed")
+        rows = [
+            json.loads(line)
+            for line in read(vault / "_state" / "source-registry.jsonl").splitlines()
+            if line.strip()
+        ]
+        row = next((item for item in rows if item.get("artifact_path") == "raw/paper_a_markdown/combined.md"), None)
+        if row is None:
+            print(rows)
+            fail("registry raw/artifact contract missing paper_a row")
+        expected_raw_hash = hashlib.sha256(raw_bytes).hexdigest()
+        expected_artifact_hash = hashlib.sha256(artifact_text.encode("utf-8")).hexdigest()
+        if row.get("raw_path") != "raw/paper_a.pdf":
+            print(row)
+            fail("registry raw_path points to parser artifact instead of original PDF")
+        if row.get("raw_hash") != expected_raw_hash:
+            print(row)
+            fail("registry raw_hash is not the original PDF hash")
+        if row.get("artifact_path") != "raw/paper_a_markdown/combined.md":
+            print(row)
+            fail("registry artifact_path missing parsed Markdown artifact")
+        if row.get("artifact_hash") != expected_artifact_hash:
+            print(row)
+            fail("registry artifact_hash is not the parsed Markdown hash")
+        orphan = next((item for item in rows if item.get("artifact_path") == "raw/orphan_markdown/combined.md"), None)
+        if orphan is None:
+            print(rows)
+            fail("registry raw/artifact contract missing artifact-only row")
+        if orphan.get("status") != "blocked" or orphan.get("kind") != "artifact_only":
+            print(orphan)
+            fail("registry artifact-only row is not explicitly blocked")
+        if orphan.get("raw_path") != "raw/orphan.pdf" or orphan.get("raw_hash") != "":
+            print(orphan)
+            fail("registry artifact-only row uses fake raw evidence identity")
+
+
 def check_corpus_ingest_fresh_vault() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp) / "vault"
@@ -1665,7 +1739,7 @@ def check_corpus_ingest_resume_continues() -> None:
         for name in ["DeepSeek_A_2401.00001", "DeepSeek_B_2402.00002"]:
             markdown_dir = vault / "raw" / f"{name}_markdown"
             markdown_dir.mkdir(parents=True)
-            (vault / "raw" / f"{name}.pdf").write_bytes(b"%PDF-1.4 fake")
+            (vault / "raw" / f"{name}.pdf").write_bytes(f"%PDF-1.4 fake {name}\n".encode("utf-8"))
             (markdown_dir / "combined.md").write_text(
                 f"# {name}\n\n"
                 "Abstract\n"
@@ -1858,6 +1932,7 @@ def main() -> None:
     check_pdf_corpus_report_parser_warnings()
     check_pdf_corpus_report_nested_raw_layout()
     check_source_discovery_arxiv_filename()
+    check_corpus_ingest_registry_raw_artifact_contract()
     check_corpus_ingest_fresh_vault()
     check_corpus_ingest_generic_concepts()
     check_corpus_ingest_metric_noise_filter()
