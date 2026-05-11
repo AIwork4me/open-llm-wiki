@@ -234,20 +234,55 @@ but concept-page conclusions and QA reports remain reviewable Markdown records.
 
 ## Source Discovery And Deduplication
 
-`_state/source-registry.jsonl` records discovered or ingested source candidates.
-Desktop clients should consume this registry instead of maintaining their own
-`desktop-ingest-registry.jsonl`. The runtime owns the registry.
+`_state/source-registry.jsonl` is the single source of truth for ingest identity
+and status. Desktop clients and external tools should consume this registry instead
+of maintaining a parallel registry. The runtime owns the registry.
 
-Each registry row is a JSON object with required fields `source_uuid`, `source_id`,
-`raw_hash`, `raw_path`, and `status`. Valid statuses: `candidate`, `queued`,
-`parsed`, `chunked`, `drafted`, `qa_passed`, `published`, `stale`, `failed`,
-`archived`.
+Each registry row is a JSON object with these fields:
 
-Deduplication keys include `arxiv`, `doi`, `sha256`/`raw_hash`, and `title_key`.
-When a duplicate raw hash is detected, the new row gets `duplicate_of` set to the
-original `source_id` and `status: archived`.
+Required fields:
+- `source_uuid`: unique stable identifier (UUID)
+- `source_id`: `LLM-NNNN` allocated from `_state/id-counter.md`
+- `raw_hash`: SHA-256 of the raw evidence file
+- `raw_path`: relative path to the raw evidence under the vault
+- `status`: one of the valid statuses below
 
-Discovery is advisory. It must not delete raw files or source pages.
+Optional fields:
+- `duplicate_of`: `source_id` of the original when this row is a duplicate
+- `last_error`: error message when status is `failed`
+- `title`, `arxiv`, `doi`, `sha256`, `title_key`: discovery metadata
+- `kind`: `raw`, `source`, `arxiv`, or `artifact_only`
+- `artifact_path`: relative path to a parser artifact such as
+  `raw/<source>_markdown/combined.md`
+- `artifact_hash`: SHA-256 of the parser artifact
+- `artifact_status`: parser artifact state such as `parsed` or `artifact_only`
+- `updated`, `created`: timestamps
+- `tags`, `concepts`: extracted metadata
+
+Valid statuses:
+`candidate`, `queued`, `parsed`, `chunked`, `drafted`, `qa_passed`,
+`published`, `stale`, `blocked`, `failed`, `archived`
+
+Deduplication keys include:
+
+- `arxiv`
+- `doi`
+- `sha256` / `raw_hash`
+- `title_key`
+
+When a duplicate raw hash is detected, the new row gets `duplicate_of` set to
+the original `source_id` and `status: archived`. It must not produce a duplicate
+source page.
+
+Failed parse, draft, or QA stages must write `status: failed` and `last_error`
+to the registry row. Failed rows remain in the registry and the ingest plan.
+
+`source_id` allocation is a transaction against `_state/id-counter.md`.
+IDs must never be reused. Reordering, renaming, or resuming raw files must not
+change already-assigned source IDs.
+
+Discovery and discovery reports are advisory. Discovery must not delete raw files
+or source pages.
 
 ## Ingest Plan
 

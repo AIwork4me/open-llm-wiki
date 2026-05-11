@@ -297,6 +297,7 @@ def check_source_registry(vault: Path, findings: list[Finding]) -> None:
     for location, message in validate_registry_rows(rows):
         findings.append(Finding("P1", f"_state/source-registry.jsonl ({location})", message))
 
+    # Check artifact/source_page link existence
     source_ids_on_disk = {p.stem for p in (vault / "sources").glob("LLM-*.md")}
     for i, row in enumerate(rows):
         source_id = row.get("source_id", "")
@@ -307,7 +308,6 @@ def check_source_registry(vault: Path, findings: list[Finding]) -> None:
                 f"_state/source-registry.jsonl (row {i + 1})",
                 f"published/qa_passed source_id {source_id} has no matching source page in sources/",
             ))
-
 
 def check_ingest_plan(vault: Path, findings: list[Finding]) -> None:
     plan_path = vault / "_state" / "ingest-plan.json"

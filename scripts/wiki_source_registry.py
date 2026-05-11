@@ -15,7 +15,7 @@ from wiki_common import ensure_within, read_text, write_text
 
 VALID_STATUSES = frozenset({
     "candidate", "queued", "parsed", "chunked", "drafted",
-    "qa_passed", "published", "stale", "failed", "archived",
+    "qa_passed", "published", "stale", "blocked", "failed", "archived",
 })
 
 REQUIRED_FIELDS = frozenset({
@@ -25,7 +25,7 @@ REQUIRED_FIELDS = frozenset({
 OPTIONAL_FIELDS = frozenset({
     "duplicate_of", "last_error", "title", "arxiv", "doi",
     "sha256", "title_key", "kind", "path", "updated", "created",
-    "tags", "concepts", "artifact_path", "artifact_hash",
+    "tags", "concepts", "artifact_path", "artifact_hash", "artifact_status",
 })
 
 SOURCE_ID_RE = re.compile(r"^LLM-\d{4}$")
