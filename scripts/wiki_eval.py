@@ -532,9 +532,18 @@ def main() -> int:
             ]
         )
         registry_rows = load_jsonl(corpus_vault / "_state" / "source-registry.jsonl")
-        kinds = {str(row.get("kind")) for row in registry_rows}
-        if not {"raw", "source"}.issubset(kinds):
-            raise SystemExit("grow eval did not refresh source registry after corpus ingest")
+        row = next((item for item in registry_rows if item.get("source_id") == "LLM-0001"), None)
+        if row is None:
+            raise SystemExit("grow eval did not keep a stable source registry row after corpus ingest")
+        import hashlib
+        raw_hash = hashlib.sha256((raw_dir / "2501.00001.pdf").read_bytes()).hexdigest()
+        artifact_hash = hashlib.sha256((parsed_dir / "combined.md").read_bytes()).hexdigest()
+        if row.get("raw_path") != "raw/2501.00001.pdf" or row.get("raw_hash") != raw_hash:
+            raise SystemExit("grow eval source registry did not preserve original raw evidence identity")
+        if row.get("artifact_path") != "raw/2501.00001_markdown/combined.md" or row.get("artifact_hash") != artifact_hash:
+            raise SystemExit("grow eval source registry did not record parsed artifact identity")
+        if row.get("status") != "published" or not (corpus_vault / "sources" / "LLM-0001.md").exists():
+            raise SystemExit("grow eval did not publish the corpus source page")
 
     # --- Claim Ledger Tests (Issue #69) ---
     with tempfile.TemporaryDirectory() as td:

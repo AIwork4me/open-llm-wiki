@@ -220,13 +220,19 @@ def main() -> int:
         fresh_sid = fresh.get("source_id", "")
         if fp in existing_by_path:
             existing = existing_by_path[fp]
-            for key in ("title", "title_key", "arxiv", "doi", "sha256", "raw_hash"):
+            for key in ("title", "title_key", "arxiv", "doi"):
                 if key in fresh:
+                    existing[key] = fresh[key]
+            for key in ("sha256", "raw_hash"):
+                if key in fresh and (existing.get("status") not in {"published", "stale"} or not existing.get(key)):
                     existing[key] = fresh[key]
         elif fresh_sid and fresh_sid in existing_by_source_id:
             existing = existing_by_source_id[fresh_sid]
-            for key in ("title", "title_key", "arxiv", "doi", "sha256", "raw_hash", "status"):
+            for key in ("title", "title_key", "arxiv", "doi", "status"):
                 if key in fresh:
+                    existing[key] = fresh[key]
+            for key in ("sha256", "raw_hash"):
+                if fresh.get(key) and (existing.get("status") not in {"published", "stale"} or not existing.get(key)):
                     existing[key] = fresh[key]
         elif fp not in merged_paths and fresh_sid not in merged_source_ids:
             import uuid as _uuid

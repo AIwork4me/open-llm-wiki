@@ -25,7 +25,7 @@ REQUIRED_FIELDS = frozenset({
 OPTIONAL_FIELDS = frozenset({
     "duplicate_of", "last_error", "title", "arxiv", "doi",
     "sha256", "title_key", "kind", "path", "updated", "created",
-    "tags", "concepts",
+    "tags", "concepts", "artifact_path", "artifact_hash",
 })
 
 SOURCE_ID_RE = re.compile(r"^LLM-\d{4}$")

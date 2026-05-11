@@ -1666,7 +1666,7 @@ def check_corpus_ingest_resume_continues() -> None:
         for name in ["DeepSeek_A_2401.00001", "DeepSeek_B_2402.00002"]:
             markdown_dir = vault / "raw" / f"{name}_markdown"
             markdown_dir.mkdir(parents=True)
-            (vault / "raw" / f"{name}.pdf").write_bytes(b"%PDF-1.4 fake")
+            (vault / "raw" / f"{name}.pdf").write_bytes(f"%PDF-1.4 fake {name}\n".encode("utf-8"))
             (markdown_dir / "combined.md").write_text(
                 f"# {name}\n\n"
                 "Abstract\n"
@@ -1819,6 +1819,77 @@ def check_claim_ledger_stale_hook() -> None:
     print("claim ledger stale hook: OK")
 
 
+def check_ingest_plan_raw_source_stale_contract() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        vault = Path(tmp) / "vault"
+        init_result = subprocess.run(
+            [sys.executable, "scripts/wiki_init.py", str(vault), "--repo-root", str(ROOT)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if init_result.returncode != 0:
+            print(init_result.stdout)
+            fail("ingest plan stale contract vault initialization failed")
+        raw_pdf = vault / "raw" / "paper_a.pdf"
+        markdown_dir = vault / "raw" / "paper_a_markdown"
+        markdown_dir.mkdir(parents=True)
+        raw_pdf.write_bytes(b"%PDF-1.4 paper a v1\n")
+        (markdown_dir / "combined.md").write_text(
+            "# Paper A\n\n"
+            "Abstract\n"
+            "Paper A reports 7B parameters and HumanEval 75% against a 60% baseline. "
+            "The source is long enough to generate a stable source page for stale-plan testing.\n",
+            encoding="utf-8",
+        )
+        ingest = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_corpus.py", str(vault), "--today", "2026-05-03"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if ingest.returncode != 0:
+            print(ingest.stdout)
+            fail("ingest plan stale contract initial ingest failed")
+        write_plan = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--write"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if write_plan.returncode != 0:
+            print(write_plan.stdout)
+            fail("ingest plan stale contract write failed")
+        raw_pdf.write_bytes(b"%PDF-1.4 paper a v2 changed raw evidence\n")
+        plan_result = subprocess.run(
+            [sys.executable, "scripts/wiki_ingest_plan.py", str(vault), "--format", "json"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if plan_result.returncode != 0:
+            print(plan_result.stdout)
+            fail("ingest plan stale contract plan failed")
+        plan = json.loads(plan_result.stdout)
+        item = plan["items"][0]
+        if item.get("source_path") != "raw/paper_a.pdf":
+            print(json.dumps(item, indent=2, sort_keys=True))
+            fail("ingest plan source_path does not point to original raw evidence")
+        if item.get("artifact_path") != "raw/paper_a_markdown/combined.md":
+            print(json.dumps(item, indent=2, sort_keys=True))
+            fail("ingest plan artifact_path does not point to combined artifact")
+        if item.get("state") != "stale" or item.get("freshness_verdict") != "stale":
+            print(json.dumps(item, indent=2, sort_keys=True))
+            fail("ingest plan did not mark changed raw PDF as stale")
+        if item.get("recommended_action") == "skip":
+            print(json.dumps(item, indent=2, sort_keys=True))
+            fail("ingest plan recommended skip for changed raw PDF")
+
+
 def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text(
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows),
@@ -1866,6 +1937,7 @@ def main() -> None:
     check_claim_ledger_schema()
     check_claim_ledger_verdict_synthesis()
     check_claim_ledger_stale_hook()
+    check_ingest_plan_raw_source_stale_contract()
     print("quality checks passed")
 
 

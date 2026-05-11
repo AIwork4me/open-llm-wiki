@@ -53,6 +53,7 @@ def _parse_artifact_for_raw(vault: Path, raw_rel: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "artifact_path": "",
         "artifact_hash": "",
+        "manifest_source_hash": "",
         "parser": "",
         "parser_version": "",
     }
@@ -65,6 +66,7 @@ def _parse_artifact_for_raw(vault: Path, raw_rel: str) -> dict[str, Any]:
             result["artifact_hash"] = _hash(combined)
             manifest = _manifest_for_combined(vault, combined)
             if manifest:
+                result["manifest_source_hash"] = str(manifest.get("source_sha256", ""))
                 result["parser"] = manifest.get("parser", "layout-api")
                 result["parser_version"] = manifest.get("parser_version", manifest.get("version", ""))
     return result
@@ -103,6 +105,7 @@ def classify_source(
         "source_hash": row.get("raw_hash", ""),
         "artifact_path": artifact["artifact_path"],
         "artifact_hash": artifact["artifact_hash"],
+        "manifest_source_hash": artifact["manifest_source_hash"],
         "parser": artifact["parser"],
         "parser_version": artifact["parser_version"],
         "source_uuid": source_uuid,
@@ -120,9 +123,10 @@ def classify_source(
 
     if registry_status == "published" and has_source_page:
         # Check if raw source has changed since last ingest
-        if raw_exists and row.get("raw_hash"):
+        published_source_hash = row.get("raw_hash") or artifact["manifest_source_hash"]
+        if raw_exists and published_source_hash:
             current_hash = _hash(raw_file)
-            if current_hash != row.get("raw_hash", ""):
+            if current_hash != published_source_hash:
                 plan_item["state"] = "stale"
                 plan_item["reason"] = "raw source hash changed since last published ingest"
                 plan_item["recommended_action"] = "re-parse and re-ingest"
@@ -156,9 +160,10 @@ def classify_source(
         return plan_item
 
     # Check staleness: artifact exists but source hash changed
-    if has_artifact and raw_exists and row.get("raw_hash"):
+    artifact_source_hash = row.get("raw_hash") or artifact["manifest_source_hash"]
+    if has_artifact and raw_exists and artifact_source_hash:
         current_hash = _hash(raw_file)
-        if current_hash != row["raw_hash"]:
+        if current_hash != artifact_source_hash:
             plan_item["state"] = "stale"
             plan_item["reason"] = "raw source changed since artifact was parsed"
             plan_item["recommended_action"] = "re-parse the updated source"

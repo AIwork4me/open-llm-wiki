@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -465,6 +466,28 @@ def merge_index(vault: Path, items: list[Item], concept_items: dict[str, list[It
     write_text(index_path, text.rstrip() + "\n")
 
 
+def original_source_for_artifact(vault: Path, combined: Path) -> tuple[Path, str]:
+    stem = combined.parent.name.removesuffix("_markdown")
+    for suffix in (".pdf", ".md", ".txt"):
+        candidate = vault / "raw" / f"{stem}{suffix}"
+        if candidate.exists() and candidate.is_file():
+            return candidate, candidate.relative_to(vault).as_posix()
+    return combined, combined.relative_to(vault).as_posix()
+
+
+def find_registry_row(rows: list[dict[str, object]], raw_rel: str, artifact_rel: str) -> dict[str, object] | None:
+    return find_by_raw_path(rows, raw_rel) or find_by_raw_path(rows, artifact_rel)
+
+
+def ensure_registry_identity(row: dict[str, object], state_dir: Path, today: str) -> None:
+    if not row.get("source_uuid"):
+        row["source_uuid"] = uuid.uuid4().hex
+    if not row.get("source_id"):
+        row["source_id"] = allocate_source_id(state_dir)
+    if not row.get("created"):
+        row["created"] = today
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Ingest raw/*_markdown/combined.md files into source pages.",
@@ -515,13 +538,16 @@ def main() -> int:
     # Register raw files in registry
     registry_rows = load_registry(registry_path)
     for combined in combined_files:
-        raw_rel = combined.relative_to(vault).as_posix()
+        artifact_rel = combined.relative_to(vault).as_posix()
+        raw_file, raw_rel = original_source_for_artifact(vault, combined)
         stem = combined.parent.name.removesuffix("_markdown")
-        existing = find_by_raw_path(registry_rows, raw_rel)
+        existing = find_registry_row(registry_rows, raw_rel, artifact_rel)
+        artifact_hash = compute_raw_hash(combined)
         if existing is None:
-            h = compute_raw_hash(combined)
+            h = compute_raw_hash(raw_file)
             dup = find_by_raw_hash(registry_rows, h)
             if dup is not None:
+                ensure_registry_identity(dup, dirs["_state"], args.today)
                 import uuid as _uuid
                 source_id_new = allocate_source_id(dirs["_state"])
                 new_row = {
@@ -529,6 +555,8 @@ def main() -> int:
                     "source_id": source_id_new,
                     "raw_hash": h,
                     "raw_path": raw_rel,
+                    "artifact_path": artifact_rel,
+                    "artifact_hash": artifact_hash,
                     "status": "archived",
                     "duplicate_of": dup.get("source_id", ""),
                     "title": stem.replace("_", " "),
@@ -538,23 +566,32 @@ def main() -> int:
                 }
                 registry_rows.append(new_row)
             else:
-                reg = register_raw(
+                register_raw(
                     registry_path, dirs["_state"],
                     raw_path=raw_rel,
-                    raw_file=combined,
+                    raw_file=raw_file,
                     title=stem.replace("_", " "),
                     arxiv=arxiv_from_name(combined.parent.name),
                     kind="raw",
                 )
                 registry_rows = load_registry(registry_path)
+                existing = find_registry_row(registry_rows, raw_rel, artifact_rel)
+                if existing is not None:
+                    existing["artifact_path"] = artifact_rel
+                    existing["artifact_hash"] = artifact_hash
+                    save_registry(registry_path, registry_rows)
         else:
+            ensure_registry_identity(existing, dirs["_state"], args.today)
+            existing["raw_path"] = raw_rel
+            existing["artifact_path"] = artifact_rel
+            existing["artifact_hash"] = artifact_hash
             # Preserve existing raw_hash for stale detection;
             # hash will be updated after successful publish
             if not existing.get("raw_hash"):
-                h = compute_raw_hash(combined)
+                h = compute_raw_hash(raw_file)
                 existing["raw_hash"] = h
-                existing["updated"] = args.today
-                save_registry(registry_path, registry_rows)
+            existing["updated"] = args.today
+            save_registry(registry_path, registry_rows)
 
     save_registry(registry_path, registry_rows)
     registry_rows = load_registry(registry_path)
@@ -564,10 +601,12 @@ def main() -> int:
     skipped_published = 0
     skipped_stale = 0
     for combined in combined_files:
-        raw_rel = combined.relative_to(vault).as_posix()
-        reg_row = find_by_raw_path(registry_rows, raw_rel)
+        artifact_rel = combined.relative_to(vault).as_posix()
+        raw_file, raw_rel = original_source_for_artifact(vault, combined)
+        reg_row = find_registry_row(registry_rows, raw_rel, artifact_rel)
         if reg_row is None:
             continue
+        ensure_registry_identity(reg_row, dirs["_state"], args.today)
         if reg_row.get("duplicate_of"):
             continue
         source_id = reg_row["source_id"]
@@ -576,7 +615,7 @@ def main() -> int:
 
         # Skip unchanged published sources
         if source_path.exists() and reg_row.get("status") == "published":
-            current_hash = compute_raw_hash(combined)
+            current_hash = compute_raw_hash(raw_file)
             if current_hash == reg_row.get("raw_hash", ""):
                 skipped_published += 1
                 continue
@@ -606,10 +645,13 @@ def main() -> int:
                     contradiction_text(item, args.today),
                 )
                 # Update raw_hash to current file hash at publish time
-                publish_hash = compute_raw_hash(combined)
+                publish_hash = compute_raw_hash(raw_file)
                 update_status(registry_path, reg_row["source_uuid"], "published",
                               kind="source", tags=item.tags, concepts=item.concepts,
-                              raw_hash=publish_hash)
+                              raw_hash=publish_hash,
+                              raw_path=raw_rel,
+                              artifact_path=artifact_rel,
+                              artifact_hash=compute_raw_hash(combined))
                 for concept in item.concepts:
                     concept_items[concept].append(item)
             else:
