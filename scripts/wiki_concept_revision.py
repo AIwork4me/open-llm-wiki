@@ -51,11 +51,34 @@ def is_review_approved(claim: dict[str, object]) -> bool:
 
 
 def claim_status_badge(claim: dict[str, object]) -> str:
-    if bool(claim.get("needs_review")) and not is_review_approved(claim):
-        return "review"
+    verdict = str(claim.get("verdict", "unreviewed"))
     if str(claim.get("science_review", "")).lower() == "rejected":
         return "contested"
+    if verdict in {"contradicted", "retracted"}:
+        return "contested"
+    if verdict in {"stale", "weak", "unreviewed"}:
+        return "review"
+    if bool(claim.get("needs_review")) and not is_review_approved(claim):
+        return "review"
     return "supported"
+
+
+def claim_count_bucket(claim: dict[str, object]) -> str:
+    verdict = str(claim.get("verdict", "unreviewed"))
+    if verdict == "supported":
+        return "supporting"
+    if verdict in {"contradicted", "retracted"} or str(claim.get("science_review", "")).lower() == "rejected":
+        return "contradicted"
+    if verdict == "stale":
+        return "stale"
+    return "review"
+
+
+def claim_count_summary(claims: list[dict[str, object]]) -> dict[str, int]:
+    counts = {"supporting": 0, "contradicted": 0, "stale": 0, "review": 0}
+    for claim in claims:
+        counts[claim_count_bucket(claim)] += 1
+    return counts
 
 
 def semantic_section(concept_id: str, claims: list[dict[str, object]], include_review_required: bool) -> str:
@@ -260,9 +283,10 @@ def main() -> int:
         if not path.exists():
             continue
         # Count claim statuses
-        supporting = sum(1 for c in items if claim_status_badge(c) == "supported")
-        contested = sum(1 for c in items if claim_status_badge(c) == "contested")
-        stale = sum(1 for c in items if claim_status_badge(c) == "review")
+        counts = claim_count_summary(items)
+        supporting = counts["supporting"]
+        contested = counts["contradicted"]
+        stale = counts["stale"]
 
         before = read_text(path)
         after = update_frontmatter(before, supporting, contested, stale, concept_id)
