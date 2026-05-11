@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from wiki_common import ensure_within, read_text, write_text
+from wiki_impact import build_edges, compute_stale_items, _load_jsonl
 
 
 START = "<!-- open-llm-wiki:semantic-claims:start -->"
@@ -143,6 +144,7 @@ def main() -> int:
     )
     parser.add_argument("--limit", type=int, default=0, help="Maximum concept pages to process; 0 means all.")
     parser.add_argument("--include-review-required", action="store_true", help="Include claims that have not passed second-pass scientific review.")
+    parser.add_argument("--only-affected", action="store_true", help="Only refresh concepts affected by stale items in the impact graph.")
     args = parser.parse_args()
 
     vault = args.vault.resolve()
@@ -152,6 +154,20 @@ def main() -> int:
     for claim in claims:
         for concept in claim.get("concepts", []):
             by_concept[str(concept)].append(claim)
+
+    # Filter to only affected concepts if --only-affected
+    if args.only_affected:
+        edges = build_edges(vault)
+        stale_items = compute_stale_items(vault, edges)
+        stale_concepts = {
+            item["item_ref"]
+            for item in stale_items
+            if item["item_type"] == "concept_section"
+        }
+        if stale_concepts:
+            by_concept = {k: v for k, v in by_concept.items() if k in stale_concepts}
+        else:
+            by_concept = {}
 
     changed: list[str] = []
     for index, (concept_id, items) in enumerate(sorted(by_concept.items()), 1):
